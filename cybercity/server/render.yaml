@@ -1,0 +1,39 @@
+# Render Blueprint for the CyberCity backend. Import this repo on Render
+# (New -> Blueprint) and it reads this file automatically, or configure a
+# Web Service manually using the same settings if you'd rather not use a
+# Blueprint.
+#
+# PERSISTENCE TRADEOFF — read before relying on this in production:
+# Render's free plan has NO persistent disk. This service's filesystem
+# (including the SQLite file at server/cybercity.sqlite) is wiped on every
+# redeploy AND periodically when a free-tier instance spins down from
+# inactivity and back up. That means shareable-code progress (the optional
+# cross-device sync feature) resets unpredictably on the free plan — core
+# gameplay is unaffected, since that's all localStorage on the player's own
+# device regardless.
+#
+# To make sync progress actually persistent: upgrade this service to a paid
+# plan, add a Render Disk (Render dashboard -> this service -> Disks),
+# mount it at e.g. /data, and set DB_PATH=/data/cybercity.sqlite as an env
+# var (see server/.env.example) so db.js writes there instead of the
+# ephemeral default location. That's a deliberate choice to make, not
+# something this file does silently — it's commented out below.
+services:
+  - type: web
+    name: cybercity-backend
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # set manually in the Render dashboard — never committed
+      - key: ALLOWED_ORIGINS
+        sync: false # set to your deployed frontend's URL once you have one
+    # disks:
+    #   - name: cybercity-data
+    #     mountPath: /data
+    #     sizeGB: 1
+    # (requires a paid plan — see the persistence note above)

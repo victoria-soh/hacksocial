@@ -1,0 +1,22 @@
+# Netlify deployment config for the CyberCity frontend (this cybercity/
+# directory). If deploying from the hacksocial repo root instead of this
+# subdirectory directly, set "Base directory" to "cybercity" in the Netlify
+# UI (or via `base = "cybercity"` here) so this file and the build commands
+# below are found.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA fallback for React Router (BrowserRouter): any path that isn't a real
+# static file falls back to index.html so deep links like /final-challenge
+# or a page refresh on /breadcrumbs don't 404. public/_redirects does the
+# same thing and would work alone, but this makes the rule visible next to
+# the rest of the deploy config.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

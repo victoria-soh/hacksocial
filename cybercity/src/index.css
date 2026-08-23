@@ -1,0 +1,1019 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   CYBERCITY DESIGN TOKENS — single source of truth for the cyberpunk theme.
+   Every component reads these custom properties rather than hardcoding
+   colors, so the whole app's look can be retuned from this one block.
+   ============================================================================ */
+:root {
+  color-scheme: dark;
+
+  /* Backgrounds: near-black charcoal/navy, layered for depth (not flat) */
+  --cc-bg: #05070e;
+  --cc-bg-alt: #0a0f1e;
+  --cc-panel: #0d1424;
+  --cc-panel-border: #24304d;
+  --cc-text: #e8ecf7;
+  --cc-text-dim: #93a0c2;
+  --cc-focus: #ffd400;
+
+  /* Signature neon accents: electric cyan + magenta/pink */
+  --cc-accent: #22e6ff;
+  --cc-accent-2: #ff2fd6;
+  --cc-glow-cyan: 0 0 10px rgba(34, 230, 255, 0.5), 0 0 26px rgba(34, 230, 255, 0.22);
+  --cc-glow-magenta: 0 0 10px rgba(255, 47, 214, 0.5), 0 0 26px rgba(255, 47, 214, 0.22);
+
+  /* Status colors — semantic meaning unchanged (amber = at risk, red =
+     compromised, green = secure), pushed more saturated with a matching
+     glow so they read as neon rather than flat. Always paired with an
+     icon/label at every call site — never color alone. */
+  --cc-good: #39ff8f;
+  --cc-warn: #ffb02e;
+  --cc-danger: #ff2d4f;
+  --cc-glow-good: 0 0 10px rgba(57, 255, 143, 0.55), 0 0 22px rgba(57, 255, 143, 0.25);
+  --cc-glow-warn: 0 0 10px rgba(255, 176, 46, 0.55), 0 0 22px rgba(255, 176, 46, 0.25);
+  --cc-glow-danger: 0 0 12px rgba(255, 45, 79, 0.65), 0 0 30px rgba(255, 45, 79, 0.35);
+
+  /* Digital Breadcrumbs: escalating visual temperature by column/sensitivity.
+     Facts run cool (teal, distinct from the cyan UI accent); inferences run
+     warm-to-hot by how sensitive the combined info is. */
+  --cc-fact: #2dd4bf;
+  --cc-fact-bg: rgba(45, 212, 191, 0.16);
+  --cc-inf-low: #ffb02e;
+  --cc-inf-low-bg: rgba(255, 176, 46, 0.14);
+  --cc-inf-medium: #ff7a1a;
+  --cc-inf-medium-bg: rgba(255, 122, 26, 0.16);
+  --cc-inf-high: #ff2d4f;
+  --cc-inf-high-bg: rgba(255, 45, 79, 0.18);
+
+  /* Typography roles: "chrome" (nav/headers/stats/badges/mission titles) is
+     a tech-display monospace for a terminal/HUD feel. "Content" (anything a
+     user needs to actually read and understand) stays a plain, highly
+     readable sans-serif — never stylized, readability wins there. */
+  --font-chrome: 'Share Tech Mono', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --font-content: system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  font: 16px/1.5 var(--font-content);
+  color: var(--cc-text);
+  background: var(--cc-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  /* Subtle depth + a faint scanline texture, baked into the page background
+     only — panels sit opaquely on top, so this never touches text contrast. */
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.022) 0px,
+      rgba(255, 255, 255, 0.022) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(circle at 20% -10%, #161f3d 0%, var(--cc-bg) 55%);
+}
+
+#root {
+  min-height: 100svh;
+}
+
+a {
+  color: inherit;
+}
+
+/* Strong, visible focus ring for keyboard navigation everywhere */
+:focus-visible {
+  outline: 3px solid var(--cc-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Chrome typography role: applied centrally to every heading, so section
+   headers and mission titles get the HUD/terminal feel without each
+   component having to opt in. Body copy (p, li, textarea, buttons, etc.)
+   is untouched and stays on --font-content for readability. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-chrome);
+  letter-spacing: 0.01em;
+}
+
+/* For non-heading "chrome" elements: stat numbers, XP, timers, badges. */
+.cc-chrome {
+  font-family: var(--font-chrome);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--cc-accent);
+  color: #06111c;
+  padding: 10px 16px;
+  border-radius: 0 0 8px 0;
+  font-weight: 700;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* ============================================================================
+   HUD PANEL — glowing border + corner-bracket motif, used by every Panel
+   across every district (see components/shared/Panel.jsx).
+   ============================================================================ */
+.cc-hud-panel {
+  position: relative;
+  border-color: color-mix(in srgb, var(--cc-accent) 22%, var(--cc-panel-border));
+  box-shadow:
+    0 0 0 1px rgba(34, 230, 255, 0.05) inset,
+    0 0 14px -8px rgba(34, 230, 255, 0.45);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.cc-hud-panel:hover {
+  border-color: color-mix(in srgb, var(--cc-accent) 45%, var(--cc-panel-border));
+  box-shadow:
+    0 0 0 1px rgba(34, 230, 255, 0.08) inset,
+    0 0 18px -6px rgba(34, 230, 255, 0.6);
+}
+.cc-hud-bracket {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--cc-accent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.cc-hud-bracket--tl {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+}
+.cc-hud-bracket--tr {
+  top: -1px;
+  right: -1px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 4px;
+}
+.cc-hud-bracket--bl {
+  bottom: -1px;
+  left: -1px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 4px;
+}
+.cc-hud-bracket--br {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 4px;
+}
+
+/* ============================================================================
+   SHARED MOTION UTILITIES — every one respects prefers-reduced-motion.
+   ============================================================================ */
+
+/* Digital Breadcrumbs: dossier lines fade/slide in as they're revealed */
+@keyframes cc-dossier-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.cc-dossier-line {
+  animation: cc-dossier-in 400ms ease-out;
+}
+
+/* Generic soft glow pulse — used for the LIVE indicator dot, the compromised
+   node, and other "this is actively ongoing" signals. */
+@keyframes cc-pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+  50% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+.cc-pulse {
+  animation: cc-pulse-glow 1.8s ease-in-out infinite;
+}
+
+/* Ambient tension vignette around the viewport while a mission is active */
+@keyframes cc-vignette-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+.cc-vignette-pulse {
+  animation: cc-vignette-pulse 3.2s ease-in-out infinite;
+}
+
+/* Opening-alert entrance: a quick shake to sell "this just happened" */
+@keyframes cc-alert-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-6px);
+  }
+  30% {
+    transform: translateX(5px);
+  }
+  45% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+@keyframes cc-alert-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.cc-alert-entrance {
+  animation: cc-alert-fade 500ms ease-out;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cc-alert-entrance {
+    animation:
+      cc-alert-fade 500ms ease-out,
+      cc-alert-shake 600ms ease-out 150ms;
+  }
+}
+
+/* Activity feed: each new entry slides/fades in with a brief highlight flash */
+@keyframes cc-feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    background-color: rgba(255, 176, 46, 0.25);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: transparent;
+  }
+}
+.cc-feed-entry {
+  animation: cc-feed-in 900ms ease-out;
+}
+
+/* Wrong-connection feedback happens at the slot itself (Digital Breadcrumbs) */
+@keyframes cc-flash-error {
+  0%,
+  100% {
+    fill: var(--cc-bg-alt);
+  }
+  50% {
+    fill: rgba(255, 45, 79, 0.45);
+  }
+}
+@keyframes cc-shake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  20%,
+  80% {
+    transform: translateX(3px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-5px);
+  }
+  40%,
+  60% {
+    transform: translateX(5px);
+  }
+}
+.cc-node-error-rect {
+  animation: cc-flash-error 550ms ease-in-out;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cc-node-error-shake {
+    animation: cc-shake 550ms ease-in-out;
+  }
+}
+
+/* Opening-alert cityscape: a couple of windows flicker red, irregularly */
+@keyframes cc-flicker {
+  0%,
+  19%,
+  21%,
+  55%,
+  57%,
+  100% {
+    opacity: 0.95;
+  }
+  20%,
+  56% {
+    opacity: 0.25;
+  }
+}
+.cc-flicker {
+  animation: cc-flicker 2.6s steps(1, end) infinite;
+}
+
+/* Arrows draw from source to target on a successful connection */
+@keyframes cc-draw-arrow {
+  from {
+    stroke-dashoffset: var(--cc-arrow-length, 1);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.cc-edge-draw {
+  animation: cc-draw-arrow 450ms ease-out forwards;
+}
+
+/* Case board: a string "pins" into place with a small pop when a
+   connection resolves (fully, or the final fact of a multi-clue set). */
+@keyframes cc-pin-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.cc-pin-pop {
+  animation: cc-pin-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Case board: a wrong drop snaps back and dissolves rather than failing silently */
+@keyframes cc-string-reject {
+  0% {
+    opacity: 0.9;
+    stroke-width: 3;
+  }
+  35% {
+    opacity: 1;
+    stroke-width: 4;
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 1;
+  }
+}
+.cc-string-reject {
+  animation: cc-string-reject 420ms ease-out forwards;
+}
+
+/* Account status diagram: a radar-style shockwave repeats outward from the
+   compromised (center) node while the incident is live. */
+@keyframes cc-shockwave {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.cc-shockwave-ring {
+  animation: cc-shockwave 2.4s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-shockwave-ring {
+    animation: none;
+    transform: scale(1);
+    opacity: 0.22;
+  }
+}
+
+/* Account status diagram: a node snapping into "secured" gets a shield badge */
+@keyframes cc-shield-snap {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.cc-shield-snap {
+  animation: cc-shield-snap 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-shield-snap {
+    animation: none;
+  }
+}
+
+/* Account status diagram: a connection line sparks and severs the instant
+   its downstream account is secured. */
+@keyframes cc-line-sever {
+  0% {
+    opacity: 1;
+    stroke-width: 2;
+  }
+  30% {
+    opacity: 1;
+    stroke-width: 4;
+    stroke: var(--cc-good);
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 1;
+  }
+}
+.cc-line-sever {
+  animation: cc-line-sever 500ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-line-sever {
+    animation: cc-line-sever 1ms forwards;
+  }
+}
+
+/* Account status diagram: a node relocating into the "secured" zone glides
+   there instead of just re-appearing. */
+.cc-node-relocate {
+  transition: transform 700ms cubic-bezier(0.34, 1.06, 0.42, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-node-relocate {
+    transition: none;
+  }
+}
+
+/* Community Centre: chat bubbles fade/slide in as the conversation plays out */
+@keyframes cc-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.cc-bubble-in {
+  animation: cc-bubble-in 300ms ease-out;
+}
+
+/* Community Centre: three-dot "typing..." indicator */
+@keyframes cc-typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.cc-typing-dot {
+  animation: cc-typing-dot 1.1s ease-in-out infinite;
+}
+
+/* Community Centre: a jargon/bad-advice tile flashes when tapped, giving
+   immediate feedback instead of waiting until the reply is sent */
+@keyframes cc-tile-warn {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+.cc-tile-warn {
+  animation: cc-tile-warn 300ms ease-in-out;
+}
+
+/* Daily Challenge: each message card enters, then slides out left/right
+   (tilting) toward whichever side the player answered, echoing the
+   swipe-left/swipe-right framing even though the actual input is a tap or
+   arrow key rather than a drag gesture. */
+@keyframes cc-swipe-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.cc-swipe-card {
+  animation: cc-swipe-card-in 250ms ease-out;
+}
+@keyframes cc-swipe-exit-left {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-6px) rotate(-2deg);
+  }
+}
+@keyframes cc-swipe-exit-right {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(6px) rotate(2deg);
+  }
+}
+.cc-swipe-exit-left {
+  animation: cc-swipe-exit-left 250ms ease-out forwards;
+}
+.cc-swipe-exit-right {
+  animation: cc-swipe-exit-right 250ms ease-out forwards;
+}
+
+/* Dashboard city graphic: ambient citizen sprites bob and turn in place —
+   a visible, populated city rather than an abstract rising percentage. */
+@keyframes cc-citizen-walk {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1);
+  }
+  25% {
+    transform: translateY(-2px) scaleX(1);
+  }
+  50% {
+    transform: translateY(0) scaleX(-1);
+  }
+  75% {
+    transform: translateY(-2px) scaleX(-1);
+  }
+}
+.cc-citizen-sprite {
+  display: inline-block;
+  animation: cc-citizen-walk 5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-citizen-sprite {
+    animation: none;
+  }
+}
+
+/* Dashboard city graphic, Tier 1 (resilience-driven atmosphere): windows
+   flicker at low resilience instead of glowing steadily. Which windows
+   flicker is decided deterministically in CityGraphic.jsx (not this CSS),
+   so the SAME windows flicker every render — only how MANY qualify changes
+   continuously with resilience. opacity="0.9" on the <rect> is a plain SVG
+   presentation attribute (not inline style), so this class correctly
+   overrides it, including the reduced-motion static fallback below. */
+@keyframes cc-window-flicker {
+  0%,
+  88%,
+  100% {
+    opacity: 0.9;
+  }
+  90%,
+  94% {
+    opacity: 0.15;
+  }
+  92% {
+    opacity: 0.5;
+  }
+  96% {
+    opacity: 0.7;
+  }
+}
+.cc-window-flicker {
+  animation: cc-window-flicker 3.2s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-window-flicker {
+    animation: none;
+    opacity: 0.45; /* static dim, standing in for "unstable" instead of animating */
+  }
+}
+
+/* Dashboard city graphic, Tier 4: falling rain streaks — count and opacity
+   both come from atmosphere.rainIntensity, computed by the caller. */
+.cc-rain-streak {
+  position: absolute;
+  top: -12%;
+  width: 1px;
+  height: 13%;
+  background: linear-gradient(180deg, transparent, rgba(190, 215, 255, 0.75));
+  transform: rotate(11deg);
+  animation-name: cc-rain-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes cc-rain-fall {
+  from {
+    transform: translateY(-10%) rotate(11deg);
+  }
+  to {
+    transform: translateY(900%) rotate(11deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-rain-streak {
+    animation: none;
+    opacity: 0.3; /* static diagonal streaks stand in for falling rain */
+  }
+}
+
+/* Dashboard city graphic, Tier 3: the synthwave grid floor scrolls by
+   animating background-position — the perspective look itself comes from
+   the rotateX() transform in CityGridFloor.jsx, not from this animation. */
+@keyframes cc-grid-scroll {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 22px;
+  }
+}
+.cc-grid-floor {
+  animation: cc-grid-scroll 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-grid-floor {
+    animation: none; /* the grid itself stays fully visible, just not scrolling */
+  }
+}
+
+/* Dashboard city graphic, Tier 3: drones drift across the scene and loop.
+   --cc-drone-end is set per-drone in CityDrones.jsx (accounts for the
+   skyline's dynamic width once landmarks are unlocked). */
+@keyframes cc-drone-fly-rtl {
+  0% {
+    transform: translateX(var(--cc-drone-end, 550px));
+    opacity: 0;
+  }
+  6%,
+  94% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+}
+@keyframes cc-drone-fly-ltr {
+  0% {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+  6%,
+  94% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(var(--cc-drone-end, 550px));
+    opacity: 0;
+  }
+}
+.cc-drone-rtl {
+  animation-name: cc-drone-fly-rtl;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.cc-drone-ltr {
+  animation-name: cc-drone-fly-ltr;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.cc-drone-choppy {
+  animation-timing-function: steps(8, end);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-drone-rtl,
+  .cc-drone-ltr {
+    animation: none;
+    opacity: 0.6; /* parked mid-flight rather than removed entirely */
+  }
+}
+
+/* Dashboard city graphic, Tier 2: a gentle ambient twinkle on a small
+   random subset of windows across all three depth layers — makes the city
+   read as alive, independent of resilience (unlike the flicker above,
+   which is a low-resilience instability signal; a window is only ever
+   assigned one or the other, never both, so their animations can't
+   conflict). Deliberately never dips as low as the flicker's — a soft
+   glow up/down, not a near-blackout. */
+@keyframes cc-window-twinkle {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.cc-window-twinkle {
+  animation: cc-window-twinkle 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-window-twinkle {
+    animation: none;
+    opacity: 0.8; /* static mid-bright, standing in for "gently alive" */
+  }
+}
+
+/* Dashboard city graphic, Tier 1: a billboard glitching at low resilience.
+   Deliberately transform-only (never touches opacity) — the billboard
+   group's resilience-driven brightness is set via inline style in
+   CityGraphic.jsx, which would always beat a CSS opacity override, so the
+   glitch reads through position jitter instead. Under reduced motion the
+   sign simply sits still at its already-dim resilience-driven brightness —
+   a valid static equivalent without needing a synthetic opacity override. */
+@keyframes cc-billboard-glitch {
+  0%,
+  85%,
+  100% {
+    transform: translateX(0);
+  }
+  86% {
+    transform: translateX(-1.5px);
+  }
+  88% {
+    transform: translateX(1px);
+  }
+  90% {
+    transform: translateX(-0.5px);
+  }
+}
+.cc-billboard-glitch {
+  animation: cc-billboard-glitch 4s steps(1, end) infinite;
+  transform-box: fill-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-billboard-glitch {
+    animation: none;
+  }
+}
+
+/* Dashboard: the Final Challenge entry point gets a slow ambient glow pulse
+   once unlocked, marking it as the game's distinct "ending moment" rather
+   than another flat panel in the list. */
+@keyframes cc-final-challenge-glow {
+  0%,
+  100% {
+    box-shadow: var(--cc-glow-magenta);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 47, 214, 0.75), 0 0 40px rgba(255, 47, 214, 0.35);
+  }
+}
+.cc-final-challenge-panel {
+  animation: cc-final-challenge-glow 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-final-challenge-panel {
+    animation: none;
+  }
+}
+
+/* Achievement overlay: badge-earned / level-up celebratory moment */
+@keyframes cc-achievement-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.cc-achievement-pop {
+  animation: cc-achievement-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes cc-achievement-icon-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+.cc-achievement-icon {
+  display: inline-block;
+  animation: cc-achievement-icon-pop 900ms ease-in-out 420ms 2;
+}
+
+/* Defence Plan export: a clean printable page. Only .cc-defence-plan and its
+   contents survive @media print — the rest of the app chrome (nav, buttons
+   marked .no-print) is hidden so "Print / Save as PDF" produces the one-page
+   summary itself. */
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #111;
+  }
+  .cc-defence-plan {
+    color: #111;
+  }
+  .cc-defence-plan .cc-hud-panel {
+    background: #fff !important;
+    border: 1px solid #999 !important;
+    box-shadow: none !important;
+    color: #111;
+  }
+  .cc-defence-plan .cc-hud-bracket {
+    display: none;
+  }
+}
+
+/* Digital Breadcrumbs case board: a very low-opacity circuit-board pattern
+   behind the board's content. Pure CSS (a repeating grid + dots at the
+   intersections), painted via ::before — a pseudo-element always paints as
+   if it were the first child, so it sits behind the panel's real content
+   (including the corner-bracket decorations from Panel.jsx) through normal
+   DOM paint order alone, no z-index needed. Opacity is deliberately tiny;
+   this is texture, not a visible layer, and must never compete with
+   text/line contrast on top of it. */
+.cc-circuit-texture {
+  position: relative;
+}
+.cc-circuit-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: linear-gradient(90deg, var(--cc-accent) 1px, transparent 1px),
+    linear-gradient(0deg, var(--cc-accent) 1px, transparent 1px), radial-gradient(var(--cc-accent) 1px, transparent 1px);
+  background-size:
+    28px 28px,
+    28px 28px,
+    28px 28px;
+  background-position:
+    0 0,
+    0 0,
+    14px 14px;
+  border-radius: inherit;
+}
+
+/* Digital Breadcrumbs case board: a quick spark burst on a correct
+   connection. --cc-spark-dx/dy are set per-particle in ConnectionMap.jsx
+   (fixed angles, not randomized, so nothing shifts mid-animation on a
+   re-render). Under reduced motion this never renders at all — see
+   .cc-node-flash below for its replacement, never both, never neither. */
+@keyframes cc-spark-burst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--cc-spark-dx), var(--cc-spark-dy)) scale(0.2);
+    opacity: 0;
+  }
+}
+.cc-spark {
+  animation: cc-spark-burst 480ms ease-out forwards;
+}
+
+/* Reduced-motion equivalent of the spark burst above: one brief brightness
+   flash over the node instead of particles flying outward. */
+@keyframes cc-node-flash {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.cc-node-flash {
+  animation: cc-node-flash 380ms ease-out forwards;
+}
+
+/* Digital Breadcrumbs dossier: terminal-style blinking cursor at the end of
+   the most recent line. A solid (non-blinking) cursor is itself the
+   reduced-motion static equivalent — still visibly "there", just not
+   animating — so this is only ever gated on the blink, never removed. */
+@keyframes cc-cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.cc-dossier-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  background: var(--cc-accent);
+  box-shadow: 0 0 4px var(--cc-accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cc-cursor-blink 1s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-dossier-cursor {
+    animation: none;
+  }
+}
+
+/* Reduced motion: every animation above collapses to its resting/final state
+   instead of playing, except the two intentionally-gentle exceptions (the
+   dossier fade and the feed's highlight flash) which are gated per-rule
+   above where a static fallback would lose the "something changed" signal. */
+@media (prefers-reduced-motion: reduce) {
+  .cc-dossier-line,
+  .cc-pulse,
+  .cc-vignette-pulse,
+  .cc-node-error-shake,
+  .cc-edge-draw,
+  .cc-flicker,
+  .cc-pin-pop,
+  .cc-bubble-in,
+  .cc-typing-dot,
+  .cc-tile-warn,
+  .cc-achievement-pop,
+  .cc-achievement-icon,
+  .cc-swipe-card,
+  .cc-swipe-exit-left,
+  .cc-swipe-exit-right {
+    animation: none;
+  }
+  .cc-string-reject {
+    animation: cc-string-reject 1ms forwards;
+  }
+  .cc-feed-entry {
+    animation: cc-feed-in 1ms;
+  }
+}
