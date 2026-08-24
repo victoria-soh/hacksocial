@@ -46,6 +46,17 @@
   --cc-inf-high: #ff2d4f;
   --cc-inf-high-bg: rgba(255, 45, 79, 0.18);
 
+  /* Community Centre: deliberately warmer and calmer than Recovery Rush's
+     red/amber urgency or Digital Breadcrumbs' cyan/magenta — a soft honey
+     gold used sparingly for this district's own frame/meter/decorations,
+     never as a full-page wash. */
+  --cc-community-warm: #d9b46a;
+  /* Guardian Mode's own accent — distinct from every resident card's accent
+     color and from the district's general warm gold, since it's a
+     different kind of activity (two people, one screen) from the four
+     solo resident missions. */
+  --cc-guardian-accent: #d98aa3;
+
   /* Typography roles: "chrome" (nav/headers/stats/badges/mission titles) is
      a tech-display monospace for a terminal/HUD feel. "Content" (anything a
      user needs to actually read and understand) stays a plain, highly
@@ -286,6 +297,36 @@ h4 {
       cc-alert-fade 500ms ease-out,
       cc-alert-shake 600ms ease-out 150ms;
   }
+}
+
+/* Privacy Mirror's role-reversal transition: each line fades/rises in */
+@keyframes cc-role-reversal-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.cc-role-reversal-line {
+  animation: cc-role-reversal-fade 450ms ease-out;
+}
+
+/* Guardian Mode's link-establishing transition: a small glowing bar sweeps
+   left-to-right across the YOU/PARTNER connector, staying full-width once done. */
+@keyframes cc-guardian-link-sweep {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.cc-guardian-link-sweep {
+  width: 0%;
+  animation: cc-guardian-link-sweep 1300ms ease-in-out forwards;
 }
 
 /* Activity feed: each new entry slides/fades in with a brief highlight flash */

@@ -16,7 +16,10 @@ const ROW_H = 112
 const TOP_PAD = 14
 const TOWER_ANCHOR_Y = 50 // vertical offset from a node's top to its tower's center, for edge anchors
 
-const STATUS_META = {
+// Exported so any other screen wanting "the same status colors/fill" for an
+// account (e.g. the Recovery Rush hub's incident-preview visuals) reads the
+// same single source of truth instead of a lookalike copy that can drift.
+export const STATUS_META = {
   compromised: { color: 'var(--cc-danger)', tag: '🔴 COMPROMISED', fill: 0.22 },
   'at-risk': { color: 'var(--cc-warn)', tag: '🟡 AT RISK', fill: 0.55 },
   secured: { color: 'var(--cc-accent)', tag: '🟢 SECURED', fill: 1 },

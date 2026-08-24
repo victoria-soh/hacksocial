@@ -3,6 +3,7 @@ import { generateScamExample, checkAiAvailable } from '../../lib/ai'
 import { computeDifficultyTier, scoreBonusRoundSelection } from '../../lib/scoring'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
+import AiFallbackNotice from '../shared/AiFallbackNotice'
 
 const BONUS_XP = { beginner: 15, intermediate: 25, advanced: 40 }
 const DIFFICULTY_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' }
@@ -69,7 +70,7 @@ export default function BonusRound() {
     <Panel className="flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-base font-semibold m-0 flex items-center gap-2">
-          <span aria-hidden="true">🧪</span> Bonus round: spot the red flags
+          <span aria-hidden="true">🧪</span> Training Simulation // Spot the Red Flags
         </h2>
         <span className="text-xs px-2 py-1 rounded-full border border-[var(--cc-panel-border)] text-[var(--cc-text-dim)]">
           Your level: {DIFFICULTY_LABEL[difficulty]}
@@ -88,9 +89,7 @@ export default function BonusRound() {
           >
             {loading ? 'Generating…' : 'Generate a challenge for my level'}
           </button>
-          {!aiAvailable && (
-            <p className="text-xs text-[var(--cc-text-dim)] m-0">AI service unavailable — using a built-in example pool.</p>
-          )}
+          <AiFallbackNotice show={!aiAvailable} message="AI service unavailable — using a built-in example pool." />
         </>
       )}
 
@@ -99,11 +98,11 @@ export default function BonusRound() {
           <div>
             <p className="text-xs text-[var(--cc-text-dim)] m-0 mb-1">Message from: {example.message.sender}</p>
             <p className="bg-[var(--cc-bg-alt)] rounded-lg p-3 m-0 text-sm">{example.message.text}</p>
-            {example.source === 'heuristic' && (
-              <p className="text-xs text-[var(--cc-text-dim)] mt-1.5 mb-0">
-                AI service unavailable — this example is from the built-in pool.
-              </p>
-            )}
+            <AiFallbackNotice
+              show={example.source === 'heuristic'}
+              message="AI service unavailable — this example is from the built-in pool."
+              className="mt-1.5"
+            />
           </div>
 
           <p className="text-sm m-0">Select every detail below that's an actual red flag:</p>

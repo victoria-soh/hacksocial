@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import { explainRecoveryMistakes } from '../../lib/ai'
 import { computeRecoveryBreakdown, scoreTierColor } from '../../lib/scoring'
 import Panel from '../shared/Panel'
+import PrimaryButton from '../shared/PrimaryButton'
 import ProgressBar from '../shared/ProgressBar'
 import ScoreRing from '../shared/ScoreRing'
+import ScreenShell from '../shared/ScreenShell'
 import WhatsNextPrompt from '../shared/WhatsNextPrompt'
+import AiFallbackNotice from '../shared/AiFallbackNotice'
 
 function formatTime(seconds) {
   const clamped = Math.max(0, Math.round(seconds))
@@ -53,7 +56,7 @@ export default function EndScreen({ summary, score, grade, contained, mistakeRep
   const callouts = mistakeReport.orderedActions.map((a, i) => ({ ...a, meta: actionMeta(a), key: `${a.action}-${a.atSeconds}-${i}` })).filter((a) => a.meta)
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+    <ScreenShell>
       <Panel className="text-center">
         <h1 className="text-2xl font-bold mt-0 mb-4">{contained ? 'INCIDENT CONTAINED' : 'INCIDENT — TIME EXPIRED'}</h1>
 
@@ -92,11 +95,11 @@ export default function EndScreen({ summary, score, grade, contained, mistakeRep
         {explanation ? (
           <>
             <p className="text-sm text-[var(--cc-text-dim)] mt-0 mb-3">{explanation}</p>
-            {explanationSource === 'heuristic' && (
-              <p className="text-xs text-[var(--cc-text-dim)] mb-3">
-                AI service unavailable — using CyberCity's built-in local analyzer.
-              </p>
-            )}
+            <AiFallbackNotice
+              show={explanationSource === 'heuristic'}
+              message="AI service unavailable — using CyberCity's built-in local analyzer."
+              className="mb-3"
+            />
           </>
         ) : (
           <p className="text-sm text-[var(--cc-text-dim)] m-0 mb-3">Analyzing your response…</p>
@@ -126,14 +129,9 @@ export default function EndScreen({ summary, score, grade, contained, mistakeRep
 
       <WhatsNextPrompt />
 
-      <Panel
-        as="button"
-        onClick={onContinue}
-        className="self-start !px-5 !py-2.5 text-left min-h-11"
-        style={{ background: 'var(--cc-accent)', color: '#06111c' }}
-      >
-        <span className="font-semibold">Back to Recovery Rush</span>
-      </Panel>
-    </div>
+      <PrimaryButton onClick={onContinue} className="self-start">
+        Back to Recovery Rush
+      </PrimaryButton>
+    </ScreenShell>
   )
 }

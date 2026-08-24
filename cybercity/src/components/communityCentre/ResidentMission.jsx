@@ -4,8 +4,10 @@ import { getResident } from '../../data/communityCentre'
 import { scoreTierColor } from '../../lib/scoring'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
+import PrimaryButton from '../shared/PrimaryButton'
 import ProgressBar from '../shared/ProgressBar'
 import ScoreRing from '../shared/ScoreRing'
+import ScreenShell from '../shared/ScreenShell'
 import WhatsNextPrompt from '../shared/WhatsNextPrompt'
 import ChatMissionEngine from './ChatMissionEngine'
 
@@ -35,7 +37,7 @@ export default function ResidentMission() {
     : 0
 
   return (
-    <div className="flex flex-col gap-4 max-w-3xl mx-auto">
+    <ScreenShell>
       <div>
         <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
           <span aria-hidden="true">{resident.icon}</span> Mission: Help {resident.name}
@@ -111,16 +113,11 @@ export default function ResidentMission() {
 
           <WhatsNextPrompt />
 
-          <Panel
-            as="button"
-            onClick={() => navigate('/community-centre')}
-            className="self-start !px-5 !py-2.5 text-left min-h-11"
-            style={{ background: 'var(--cc-accent)', color: '#06111c' }}
-          >
-            <span className="font-semibold">Back to Community Centre</span>
-          </Panel>
+          <PrimaryButton onClick={() => navigate('/community-centre')} className="self-start">
+            Back to Community Centre
+          </PrimaryButton>
         </>
       )}
-    </div>
+    </ScreenShell>
   )
 }

@@ -7,18 +7,25 @@ import {
   explainGrounding,
   getGroundTruthInferences,
   getTopChains,
+  getInferenceValueOptions,
+  getInferenceClueCategoryIds,
+  pickDistractorCategories,
+  NOT_ENOUGH_EVIDENCE,
   MAX_POSSIBLE_SCORES,
 } from '../../lib/privacyMirrorEngine'
-import { gradeGuess } from '../../lib/privacyMirrorSimilarity'
-import { checkAiAvailable, explainPrivacyMirrorRisk, generatePrivacyMirrorPersona, explainPrivacyMirrorFeedback } from '../../lib/ai'
+import { checkAiAvailable, explainPrivacyMirrorRisk, generatePrivacyMirrorPersona } from '../../lib/ai'
 import { calculatePrivacyDefenceScore } from '../../lib/scoring'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
 import ProgressBar from '../shared/ProgressBar'
+import AiFallbackNotice from '../shared/AiFallbackNotice'
 import ExposureChainDiagram from './privacyMirror/ExposureChainDiagram'
 import EngineInspector from './privacyMirror/EngineInspector'
+import RoleReversalTransition from './privacyMirror/RoleReversalTransition'
 
 const LEVEL_COLOR_VAR = { Low: 'var(--cc-good)', Medium: 'var(--cc-warn)', High: 'var(--cc-danger)' }
+const AI_FALLBACK_MESSAGE =
+  "AI service unavailable — using CyberCity's built-in local generator for wording (the risk scoring itself never uses AI either way)."
 
 function IntroBanner() {
   return (
@@ -28,23 +35,17 @@ function IntroBanner() {
   )
 }
 
-function AiFallbackNotice({ aiAvailable }) {
-  if (aiAvailable) return null
-  return (
-    <p className="text-xs text-[var(--cc-text-dim)] m-0">
-      AI service unavailable — using CyberCity's built-in local generator for wording (the risk scoring itself never
-      uses AI either way).
-    </p>
-  )
-}
-
 /**
  * Privacy Mirror — three screens (select → reveal → switch sides). Never
- * touches the player's real bio/posts: the only inputs are which of 14
- * category ids they selected, and their own free-text guess about a
- * FICTIONAL persona in screen 3. See lib/privacyMirrorEngine.js (layer 1,
- * deterministic, no model calls) and lib/ai.js's Task 4 section (layer 2,
- * generative, never decides a risk level or a grade) for the two halves.
+ * touches the player's real bio/posts: the only input is which of 14
+ * category ids they selected in screen 1. See lib/privacyMirrorEngine.js
+ * (layer 1, deterministic, no model calls) and lib/ai.js's Task 4 section
+ * (layer 2, generative, only ever phrases wording — never decides a risk
+ * level, a grade, or which post maps to which category) for the two
+ * halves. Screen 3's persona and its investigation mechanic are both fully
+ * deterministic (see generatePrivacyMirrorPersona), so the only AI-sourced
+ * text anywhere in this feature is screen 2's per-risk explanations, which
+ * screen 3 reuses rather than re-asking the model for anything.
  */
 export default function PrivacyMirror() {
   const { state, recordPrivacyScoreScan } = useGame()
@@ -52,16 +53,10 @@ export default function PrivacyMirror() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [committedIds, setCommittedIds] = useState([])
   const [aiAvailable, setAiAvailable] = useState(true) // optimistic default, matches the rest of the app
+  const [transitionDone, setTransitionDone] = useState(false)
 
   const [riskExplanations, setRiskExplanations] = useState({}) // riskId -> { text, source }
   const [explanationsLoading, setExplanationsLoading] = useState(false)
-
-  const [persona, setPersona] = useState(null)
-  const [personaLoading, setPersonaLoading] = useState(false)
-  const [guessText, setGuessText] = useState('')
-  const [verdicts, setVerdicts] = useState(null)
-  const [feedback, setFeedback] = useState(null)
-  const [gradingLoading, setGradingLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -93,6 +88,16 @@ export default function PrivacyMirror() {
   const chains = useMemo(() => {
     return getTopChains(committedIds, 2).map((c) => ({ ...c, level: riskLevel(committedScores[c.riskId], c.riskId) }))
   }, [committedIds, committedScores])
+  // The full trail (not capped at 2) for screen 3's end-of-investigation
+  // reveal — screen 2's own diagram stays capped for readability there.
+  const allChains = useMemo(() => {
+    return getTopChains(committedIds, inferableRisks.length).map((c) => ({
+      ...c,
+      level: riskLevel(committedScores[c.riskId], c.riskId),
+    }))
+  }, [committedIds, committedScores, inferableRisks.length])
+
+  const persona = useMemo(() => (committedIds.length > 0 ? generatePrivacyMirrorPersona(committedIds) : null), [committedIds])
 
   function revealExposure() {
     const ids = [...selectedIds]
@@ -120,23 +125,6 @@ export default function PrivacyMirror() {
 
   function switchSides() {
     setStep('persona')
-    if (!persona) {
-      setPersonaLoading(true)
-      generatePrivacyMirrorPersona(committedIds).then((p) => {
-        setPersona(p)
-        setPersonaLoading(false)
-      })
-    }
-  }
-
-  function gradeMyGuess() {
-    const graded = gradeGuess(guessText, groundTruths)
-    setVerdicts(graded)
-    setGradingLoading(true)
-    explainPrivacyMirrorFeedback(graded, persona?.name ?? 'this persona').then((fb) => {
-      setFeedback(fb)
-      setGradingLoading(false)
-    })
   }
 
   return (
@@ -171,18 +159,15 @@ export default function PrivacyMirror() {
         />
       )}
 
-      {step === 'persona' && (
-        <ScreenPersona
-          committedIds={committedIds}
+      {step === 'persona' && !transitionDone && <RoleReversalTransition onDone={() => setTransitionDone(true)} />}
+
+      {step === 'persona' && transitionDone && (
+        <ScreenInvestigate
           persona={persona}
-          personaLoading={personaLoading}
-          guessText={guessText}
-          setGuessText={setGuessText}
-          verdicts={verdicts}
-          feedback={feedback}
-          gradingLoading={gradingLoading}
-          onGrade={gradeMyGuess}
-          chains={chains}
+          committedIds={committedIds}
+          groundTruths={groundTruths}
+          riskExplanations={riskExplanations}
+          allChains={allChains}
           aiAvailable={aiAvailable}
         />
       )}
@@ -290,7 +275,7 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
         </div>
       </div>
 
-      <AiFallbackNotice aiAvailable={aiAvailable} />
+      <AiFallbackNotice show={!aiAvailable} message={AI_FALLBACK_MESSAGE} />
 
       <div>
         <h3 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--cc-accent-2)' }}>
@@ -329,18 +314,293 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
   )
 }
 
-function ScreenPersona({ committedIds, persona, personaLoading, guessText, setGuessText, verdicts, feedback, gradingLoading, onGrade, chains, aiAvailable }) {
-  const groundTruths = useMemo(() => getGroundTruthInferences(committedIds), [committedIds])
-  const topChain = chains[0]
+// ---------------------------------------------------------------------------
+// Screen 3 — the switch-sides investigation. Structured, card-based
+// selection throughout (same interaction DNA as screen 1's category grid),
+// never free text: a "direct facts" pass over the persona's own categories,
+// then a "what can you infer" pass over only the risk types the engine
+// actually flagged for this exact selection, each broken into a value pick
+// and a supporting-clue pick with an immediate reveal, and finally a
+// debrief with a reveal-the-trail diagram.
 
-  function closingLine() {
-    const name = persona?.name ?? 'This persona'
-    if (!topChain) return 'Multiple independent, harmless-looking details can still add up to a pattern.'
-    const conclusion = topChain.rule.chain[2]
-    if (topChain.riskId === 'location') {
-      return `${name} never posted their address. But several harmless details together could narrow down where they spend most of their time — ${conclusion.charAt(0).toLowerCase()}${conclusion.slice(1)}.`
+const CARD_VARIANT_STYLE = {
+  idle: { borderColor: 'var(--cc-panel-border)', background: 'var(--cc-bg-alt)', boxShadow: 'none' },
+  correct: { borderColor: 'var(--cc-good)', background: 'rgba(90,214,150,0.14)', boxShadow: '0 0 8px -2px var(--cc-good)' },
+  incorrect: { borderColor: 'var(--cc-danger)', background: 'rgba(255,90,90,0.14)', boxShadow: '0 0 8px -2px var(--cc-danger)' },
+}
+
+function ChoiceCard({ variant = 'idle', onClick, disabled, className = '', children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl border px-3 py-2.5 text-left text-sm min-h-11 transition-colors disabled:cursor-default ${className}`}
+      style={CARD_VARIANT_STYLE[variant]}
+    >
+      {children}
+    </button>
+  )
+}
+
+function DirectFactsStep({ persona, committedIds, onDone }) {
+  const [options] = useState(() => {
+    const distractorIds = pickDistractorCategories(committedIds, Math.min(4, 14 - committedIds.length))
+    const all = [...committedIds, ...distractorIds]
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[all[i], all[j]] = [all[j], all[i]]
     }
-    return `${name} never posted this directly. But ${topChain.rule.chain[0].toLowerCase()} combined with ${topChain.rule.chain[1].charAt(0).toLowerCase()}${topChain.rule.chain[1].slice(1)} was enough to reveal it.`
+    return all
+  })
+  const [picks, setPicks] = useState({}) // categoryId -> 'correct' | 'incorrect'
+
+  function pick(categoryId) {
+    if (picks[categoryId]) return
+    setPicks((prev) => ({ ...prev, [categoryId]: committedIds.includes(categoryId) ? 'correct' : 'incorrect' }))
+  }
+
+  const pickedCount = Object.keys(picks).length
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="text-base font-bold mt-0 mb-0">What can you directly tell about {persona.name}?</h3>
+      <p className="text-sm text-[var(--cc-text-dim)] m-0">
+        Tap anything you think {persona.name}'s posts actually show — some of these are real, some aren't.
+      </p>
+      <div role="group" aria-label="Direct-fact candidates" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {options.map((id) => {
+          const cat = SHARING_CATEGORIES.find((c) => c.id === id)
+          const variant = picks[id] ?? 'idle'
+          return (
+            <ChoiceCard key={id} variant={variant} onClick={() => pick(id)} disabled={Boolean(picks[id])} className="flex flex-col items-center gap-1 text-center">
+              <span aria-hidden="true">{cat.emoji}</span>
+              <span className="text-xs leading-tight">{cat.label}</span>
+              {picks[id] && (
+                <span className="text-[10px]" style={{ color: variant === 'correct' ? 'var(--cc-good)' : 'var(--cc-danger)' }}>
+                  {variant === 'correct' ? '✅ directly shown' : `❌ not in ${persona.name}'s posts`}
+                </span>
+              )}
+            </ChoiceCard>
+          )
+        })}
+      </div>
+      <button
+        onClick={() => onDone(picks)}
+        disabled={pickedCount === 0}
+        className="self-start px-5 py-2.5 rounded-lg bg-[var(--cc-accent-2)] text-[#1a0512] font-semibold min-h-11 disabled:opacity-40"
+      >
+        Continue to inferences →
+      </button>
+    </div>
+  )
+}
+
+function InferenceCategoryGrid({ groundTruths, results, activeRiskId, onSelect }) {
+  return (
+    <div role="group" aria-label="Inference categories" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {groundTruths.map((g) => {
+        const risk = RISK_TYPES.find((r) => r.id === g.riskId)
+        const done = results[g.riskId]
+        const variant = done ? (done.valueCorrect && done.clueCorrect ? 'correct' : 'incorrect') : 'idle'
+        return (
+          <ChoiceCard
+            key={g.riskId}
+            variant={variant}
+            onClick={() => onSelect(g.riskId)}
+            disabled={Boolean(done) || activeRiskId === g.riskId}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span aria-hidden="true">{risk?.icon}</span>
+            <span className="text-xs leading-tight">{g.riskLabel}</span>
+            {done && <span className="text-[10px]">{variant === 'correct' ? '✅ solved' : '❌ reviewed'}</span>}
+          </ChoiceCard>
+        )
+      })}
+    </div>
+  )
+}
+
+function InferenceSubflow({ groundTruth, persona, committedIds, explanation, onComplete, onClose }) {
+  const [valueOptions] = useState(() => getInferenceValueOptions(groundTruth.riskId, committedIds))
+  const [chosenValue, setChosenValue] = useState(null)
+  const [chosenClueId, setChosenClueId] = useState(null)
+
+  const correctClueIds = useMemo(() => getInferenceClueCategoryIds(groundTruth.riskId, committedIds), [groundTruth.riskId, committedIds])
+
+  function pickValue(value) {
+    if (chosenValue) return
+    setChosenValue(value)
+  }
+
+  function pickClue(categoryId) {
+    if (chosenClueId) return
+    setChosenClueId(categoryId)
+    const clueCorrect = correctClueIds.includes(categoryId)
+    const valueCorrect = chosenValue === valueOptions.correctValue
+    onComplete({ riskId: groundTruth.riskId, valueCorrect, clueCorrect })
+  }
+
+  const valueCorrect = chosenValue != null && chosenValue === valueOptions.correctValue
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border p-3" style={{ borderColor: 'var(--cc-accent-2)', background: 'rgba(255,47,214,0.05)' }}>
+      <p className="text-sm font-semibold m-0">What can you conclude about {groundTruth.riskLabel.toLowerCase()}?</p>
+      <div className="flex flex-col gap-2">
+        {valueOptions.options.map((value) => {
+          const isChosen = chosenValue === value
+          const variant = chosenValue == null ? 'idle' : isChosen ? (value === valueOptions.correctValue ? 'correct' : 'incorrect') : 'idle'
+          return (
+            <ChoiceCard key={value} variant={variant} onClick={() => pickValue(value)} disabled={Boolean(chosenValue)}>
+              {value}
+            </ChoiceCard>
+          )
+        })}
+      </div>
+
+      {chosenValue && (
+        <p className="text-xs m-0" style={{ color: valueCorrect ? 'var(--cc-good)' : 'var(--cc-danger)' }}>
+          {valueCorrect
+            ? `✅ Right — that's a supported inference: ${valueOptions.correctValue.charAt(0).toLowerCase()}${valueOptions.correctValue.slice(1)}.`
+            : chosenValue === NOT_ENOUGH_EVIDENCE
+              ? `❌ There actually is enough evidence — ${valueOptions.correctValue.charAt(0).toLowerCase()}${valueOptions.correctValue.slice(1)}.`
+              : `❌ Not quite — the actual inference is: ${valueOptions.correctValue.charAt(0).toLowerCase()}${valueOptions.correctValue.slice(1)}.`}
+        </p>
+      )}
+
+      {chosenValue && (
+        <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cc-panel-border)' }}>
+          <p className="text-sm font-semibold m-0">Which post supports that?</p>
+          <div className="flex flex-col gap-2">
+            {persona.posts.map((post) => {
+              const isChosen = chosenClueId === post.categoryId
+              const isCorrectPost = correctClueIds.includes(post.categoryId)
+              const variant = chosenClueId == null ? 'idle' : isChosen ? (isCorrectPost ? 'correct' : 'incorrect') : 'idle'
+              return (
+                <ChoiceCard key={post.categoryId} variant={variant} onClick={() => pickClue(post.categoryId)} disabled={Boolean(chosenClueId)}>
+                  <span className="text-xs text-[var(--cc-text-dim)]">{post.platform}</span>
+                  <p className="m-0">{post.text}</p>
+                </ChoiceCard>
+              )
+            })}
+          </div>
+          {chosenClueId && (
+            <>
+              <p className="text-xs m-0" style={{ color: correctClueIds.includes(chosenClueId) ? 'var(--cc-good)' : 'var(--cc-danger)' }}>
+                {correctClueIds.includes(chosenClueId)
+                  ? '✅ Right post — that one directly feeds this inference.'
+                  : `❌ Not that one — the post(s) that actually feed this: ${persona.posts
+                      .filter((p) => correctClueIds.includes(p.categoryId))
+                      .map((p) => `"${p.text}"`)
+                      .join(', ')}.`}
+              </p>
+              {explanation && <p className="text-xs text-[var(--cc-text-dim)] m-0">💡 {explanation}</p>}
+              <button
+                onClick={onClose}
+                className="self-start px-4 py-2 rounded-lg border text-sm min-h-11"
+                style={{ borderColor: 'var(--cc-panel-border)' }}
+              >
+                ← Back to categories
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function computeKeyLesson({ personaName, groundTruths, results, committedIds, directPicks }) {
+  const firstMissedInference = groundTruths.find((g) => {
+    const r = results[g.riskId]
+    return !r || !r.valueCorrect || !r.clueCorrect
+  })
+  if (firstMissedInference) {
+    const desc = firstMissedInference.description
+    return `You missed that ${firstMissedInference.riskLabel.toLowerCase()} was inferable: ${desc.charAt(0).toLowerCase()}${desc.slice(1)}.`
+  }
+  const uncheckedDirect = committedIds.find((id) => directPicks[id] !== 'correct')
+  if (uncheckedDirect) {
+    const label = SHARING_CATEGORIES.find((c) => c.id === uncheckedDirect)?.label ?? uncheckedDirect
+    return `You didn't confirm "${label}" was one of ${personaName}'s own posts — worth a second look next time.`
+  }
+  if (groundTruths.length === 0) {
+    return `This exact mix of categories didn't create a strong inferable pattern for ${personaName} this round — that's a genuinely safer combination than most.`
+  }
+  return `You caught everything the engine flagged for ${personaName} — that's the full trail this persona's posts support.`
+}
+
+function Debrief({ persona, committedIds, directPicks, groundTruths, results, allChains }) {
+  const directTotal = committedIds.length
+  const directCorrect = Object.values(directPicks).filter((v) => v === 'correct').length
+  const inferenceTotal = groundTruths.length
+  const inferenceCorrect = Object.values(results).filter((r) => r.valueCorrect && r.clueCorrect).length
+  const keyLesson = computeKeyLesson({ personaName: persona.name, groundTruths, results, committedIds, directPicks })
+
+  const correctRiskIds = new Set(
+    Object.entries(results)
+      .filter(([, r]) => r.valueCorrect && r.clueCorrect)
+      .map(([riskId]) => riskId),
+  )
+  const correctChains = allChains.filter((c) => correctRiskIds.has(c.riskId))
+  const revealChains = correctChains.length > 0 ? correctChains : allChains
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-lg font-bold mt-0 mb-0">Investigation complete</h3>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg p-3" style={{ background: 'var(--cc-bg-alt)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-1 text-[var(--cc-text-dim)]">Direct facts</p>
+          <p className="text-2xl font-bold m-0" style={{ color: 'var(--cc-accent)' }}>
+            {directCorrect} / {directTotal}
+          </p>
+        </div>
+        <div className="rounded-lg p-3" style={{ background: 'var(--cc-bg-alt)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide m-0 mb-1 text-[var(--cc-text-dim)]">Inferences</p>
+          <p className="text-2xl font-bold m-0" style={{ color: 'var(--cc-warn)' }}>
+            {inferenceCorrect} / {inferenceTotal}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-sm font-medium m-0 rounded-lg p-3 border-l-2" style={{ borderColor: 'var(--cc-accent-2)', background: 'var(--cc-bg-alt)' }}>
+        🔑 {keyLesson}
+      </p>
+
+      <div>
+        <h4 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--cc-accent-2)' }}>
+          Reveal the trail
+        </h4>
+        {revealChains.length > 0 ? (
+          <ExposureChainDiagram chains={revealChains} />
+        ) : (
+          <p className="text-sm text-[var(--cc-text-dim)] m-0">
+            No traceable chain for this exact mix of categories — this combination didn't line up into a strong
+            inferable pattern.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ScreenInvestigate({ persona, committedIds, groundTruths, riskExplanations, allChains, aiAvailable }) {
+  const [phase, setPhase] = useState('direct') // direct -> inference -> debrief
+  const [directPicks, setDirectPicks] = useState(null)
+  const [activeRiskId, setActiveRiskId] = useState(null)
+  const [results, setResults] = useState({})
+
+  if (!persona) {
+    return <p className="text-sm text-[var(--cc-text-dim)]">Select some categories first to generate a persona.</p>
+  }
+
+  function handleDirectDone(picks) {
+    setDirectPicks(picks)
+    setPhase(groundTruths.length > 0 ? 'inference' : 'debrief')
+  }
+
+  function handleInferenceComplete({ riskId, valueCorrect, clueCorrect }) {
+    setResults((prev) => ({ ...prev, [riskId]: { valueCorrect, clueCorrect } }))
   }
 
   return (
@@ -353,71 +613,60 @@ function ScreenPersona({ committedIds, persona, personaLoading, guessText, setGu
         </p>
       </div>
 
-      <AiFallbackNotice aiAvailable={aiAvailable} />
+      <AiFallbackNotice show={!aiAvailable} message={AI_FALLBACK_MESSAGE} />
 
-      {personaLoading || !persona ? (
-        <p className="text-sm text-[var(--cc-text-dim)]">Generating persona…</p>
-      ) : (
-        <div className="bg-[var(--cc-bg-alt)] rounded-lg p-4">
-          <p className="font-bold m-0 mb-2">{persona.name}</p>
-          <ul className="list-none p-0 m-0 flex flex-col gap-2 text-sm">
-            {persona.posts.map((post, i) => (
-              <li key={i} className="border-b border-[var(--cc-panel-border)] pb-2 last:border-0 last:pb-0">
-                <span className="text-xs text-[var(--cc-text-dim)]">{post.platform}</span>
-                <p className="m-0">{post.text}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="pm-guess" className="text-sm font-medium">
-          What do you think {persona?.name ?? 'this person'}'s daily routine looks like? Where do they likely live or
-          work?
-        </label>
-        <textarea
-          id="pm-guess"
-          value={guessText}
-          onChange={(e) => setGuessText(e.target.value)}
-          rows={4}
-          placeholder="Type your guess…"
-          className="w-full rounded-lg bg-[var(--cc-bg-alt)] border border-[var(--cc-panel-border)] p-3 text-sm"
-        />
-        <button
-          onClick={onGrade}
-          disabled={!guessText.trim() || !persona}
-          className="self-start px-4 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11 disabled:opacity-40"
-        >
-          Grade my guess
-        </button>
+      <div className="cc-role-reversal-line bg-[var(--cc-bg-alt)] rounded-lg p-4">
+        <p className="font-bold m-0 mb-2">{persona.name}</p>
+        <ul className="list-none p-0 m-0 flex flex-col gap-2 text-sm">
+          {persona.posts.map((post) => (
+            <li key={post.categoryId} className="border-b border-[var(--cc-panel-border)] pb-2 last:border-0 last:pb-0">
+              <span className="text-xs text-[var(--cc-text-dim)]">{post.platform}</span>
+              <p className="m-0">{post.text}</p>
+            </li>
+          ))}
+        </ul>
       </div>
 
-      {verdicts && (
+      {phase === 'direct' && <DirectFactsStep persona={persona} committedIds={committedIds} onDone={handleDirectDone} />}
+
+      {phase === 'inference' && (
         <div className="flex flex-col gap-3">
-          <ul className="list-none p-0 m-0 flex flex-col gap-2 text-sm">
-            {verdicts.map((v) => (
-              <li key={v.riskId} className="flex items-start gap-2">
-                <span aria-hidden="true">{v.matched ? '✅' : '❌'}</span>
-                <span>
-                  <span className="font-medium">{v.riskLabel}</span>
-                  <span className="block text-xs text-[var(--cc-text-dim)]">
-                    {v.description} — similarity {v.similarity.toFixed(2)} ({v.matched ? 'matched' : 'missed'})
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="text-sm m-0">{gradingLoading ? 'Generating feedback…' : feedback?.text}</p>
-          {!gradingLoading && <p className="text-sm font-medium m-0">{closingLine()}</p>}
+          <h3 className="text-base font-bold mt-0 mb-0">What can you infer about {persona.name}?</h3>
+          <p className="text-sm text-[var(--cc-text-dim)] m-0">
+            Only the categories our own scoring engine actually flagged as inferable from this exact mix of posts are
+            shown below.
+          </p>
+          <InferenceCategoryGrid groundTruths={groundTruths} results={results} activeRiskId={activeRiskId} onSelect={setActiveRiskId} />
+          {activeRiskId && (
+            <InferenceSubflow
+              groundTruth={groundTruths.find((g) => g.riskId === activeRiskId)}
+              persona={persona}
+              committedIds={committedIds}
+              explanation={riskExplanations[activeRiskId]?.text}
+              onComplete={handleInferenceComplete}
+              onClose={() => setActiveRiskId(null)}
+            />
+          )}
+          {Object.keys(results).length === groundTruths.length && (
+            <button
+              onClick={() => setPhase('debrief')}
+              className="self-start px-5 py-2.5 rounded-lg bg-[var(--cc-accent-2)] text-[#1a0512] font-semibold min-h-11"
+            >
+              See my results →
+            </button>
+          )}
         </div>
       )}
 
-      {groundTruths.length === 0 && (
-        <p className="text-xs text-[var(--cc-text-dim)] m-0">
-          No inferable facts scored high enough for this selection — go back and pick a related pair of categories
-          to see grading in action.
-        </p>
+      {phase === 'debrief' && (
+        <Debrief
+          persona={persona}
+          committedIds={committedIds}
+          directPicks={directPicks ?? {}}
+          groundTruths={groundTruths}
+          results={results}
+          allChains={allChains}
+        />
       )}
     </div>
   )

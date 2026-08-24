@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { scoreTileReply, scoreResidentMission } from '../../lib/scoring'
 import Panel from '../shared/Panel'
+import PrimaryButton from '../shared/PrimaryButton'
 
 function formatTime() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -87,6 +88,9 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
 
   if (!scenario) return <p>Unknown scenario.</p>
 
+  const allTiles = [...scenario.replyTiles.core, ...scenario.replyTiles.distractors]
+  const previewSentence = selectedTileIds.map((id) => allTiles.find((t) => t.id === id)?.text).join(' ')
+
   async function chooseStrategy(strategy) {
     if (phase !== 'deciding') return
     setChosenStrategyId(strategy.id)
@@ -110,8 +114,7 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
 
   async function sendReply() {
     if (selectedTileIds.length === 0) return
-    const allTiles = [...scenario.replyTiles.core, ...scenario.replyTiles.distractors]
-    const assembledText = `${selectedTileIds.map((id) => allTiles.find((t) => t.id === id)?.text).join(' ')}.`
+    const assembledText = `${previewSentence}.`
     pushMessage('player', assembledText)
     setPhase('sending')
 
@@ -183,10 +186,10 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
             <button
               key={s.id}
               onClick={() => chooseStrategy(s)}
-              className="px-4 py-2.5 rounded-full border text-sm text-left min-h-11"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full border text-sm text-left min-h-11"
               style={{ borderColor: 'var(--cc-panel-border)', background: 'var(--cc-bg-alt)' }}
             >
-              {s.label}
+              <span aria-hidden="true">{s.icon}</span> {s.label}
             </button>
           ))}
         </div>
@@ -205,7 +208,7 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
           >
             {selectedTileIds.length === 0 && <span className="text-xs text-[var(--cc-text-dim)] px-1">Tap tiles below to add them here…</span>}
             {selectedTileIds.map((id) => {
-              const tile = [...scenario.replyTiles.core, ...scenario.replyTiles.distractors].find((t) => t.id === id)
+              const tile = allTiles.find((t) => t.id === id)
               return (
                 <button
                   key={id}
@@ -219,6 +222,19 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
               )
             })}
           </div>
+
+          {/* Live preview of the sentence the tapped tiles combine into, styled like
+              the actual outgoing chat bubble above so it's visually obvious this is
+              a preview of what gets sent — not just a second, disconnected list of
+              the same tiles. */}
+          {selectedTileIds.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-semibold uppercase tracking-wide m-0 text-[var(--cc-text-dim)]">Preview</p>
+              <div className="rounded-2xl px-3 py-2 text-sm self-start max-w-[85%]" style={{ background: 'var(--cc-accent)', color: '#06111c' }}>
+                {previewSentence}.
+              </div>
+            </div>
+          )}
 
           {/* Immediate feedback for a jargon/bad-advice tile, shown the instant it's
               tapped — independent of the tile's current list, since selecting it
@@ -250,14 +266,13 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
               ))}
           </div>
 
-          <button
+          <PrimaryButton
             onClick={sendReply}
             disabled={selectedTileIds.length === 0 || phase === 'sending'}
-            className="self-start px-5 py-2.5 rounded-lg font-semibold min-h-11 disabled:opacity-40"
-            style={{ background: 'var(--cc-accent)', color: '#06111c' }}
+            className="self-start"
           >
             Send reply
-          </button>
+          </PrimaryButton>
         </Panel>
       )}
     </>

@@ -3,18 +3,35 @@ import { useNavigate } from 'react-router-dom'
 import { GUARDIAN_SCENARIO } from '../../data/communityCentre'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
+import PrimaryButton from '../shared/PrimaryButton'
+import ScreenShell from '../shared/ScreenShell'
 import WhatsNextPrompt from '../shared/WhatsNextPrompt'
+import GuardianLinkTransition from './GuardianLinkTransition'
 
 const PLAYER_LABEL = { A: 'Player A', B: 'Player B' }
 const GUARDIAN_XP = 40
 
 export default function GuardianMode() {
+  const [linked, setLinked] = useState(false)
   const [phase, setPhase] = useState('intro') // intro | handoff | clue | summary
   const [clueIndex, setClueIndex] = useState(0)
   const [answers, setAnswers] = useState([]) // [{ clueId, guessRedFlag, correct }]
   const [pendingGuess, setPendingGuess] = useState(null)
   const { completeGuardianMode, addXP } = useGame()
   const navigate = useNavigate()
+
+  // Purely decorative — see GuardianLinkTransition. Everything below still
+  // runs on the one shared device/screen exactly as before; this just plays
+  // once before the real intro content on every fresh visit to this route.
+  if (!linked) {
+    return (
+      <ScreenShell maxWidth="max-w-lg">
+        <Panel>
+          <GuardianLinkTransition onDone={() => setLinked(true)} />
+        </Panel>
+      </ScreenShell>
+    )
+  }
 
   const clue = GUARDIAN_SCENARIO.clues[clueIndex]
   const isLastClue = clueIndex === GUARDIAN_SCENARIO.clues.length - 1
@@ -48,7 +65,7 @@ export default function GuardianMode() {
 
   if (phase === 'intro') {
     return (
-      <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+      <ScreenShell>
         <Panel className="flex flex-col gap-3">
           <h1 className="text-xl font-bold mt-0 flex items-center gap-2">
             <span aria-hidden="true">🤝</span> Guardian Mode
@@ -64,20 +81,17 @@ export default function GuardianMode() {
             perfect proof.
           </p>
           <p className="text-sm m-0">You'll alternate: Player A takes the first clue, Player B the next, and so on.</p>
-          <button
-            onClick={begin}
-            className="self-start mt-1 px-5 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11"
-          >
+          <PrimaryButton onClick={begin} className="self-start mt-1">
             Begin Guardian Mode
-          </button>
+          </PrimaryButton>
         </Panel>
-      </div>
+      </ScreenShell>
     )
   }
 
   if (phase === 'summary') {
     return (
-      <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+      <ScreenShell>
         <Panel>
           <h1 className="text-xl font-bold mt-0">Guardian Mode complete</h1>
           <p className="m-0">
@@ -107,19 +121,16 @@ export default function GuardianMode() {
         </Panel>
         <WhatsNextPrompt />
 
-        <button
-          onClick={() => navigate('/community-centre')}
-          className="self-start px-5 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11"
-        >
+        <PrimaryButton onClick={() => navigate('/community-centre')} className="self-start">
           Back to Community Centre
-        </button>
-      </div>
+        </PrimaryButton>
+      </ScreenShell>
     )
   }
 
   if (phase === 'handoff') {
     return (
-      <div className="flex flex-col gap-6 max-w-lg mx-auto">
+      <ScreenShell maxWidth="max-w-lg">
         <Panel className="text-center flex flex-col gap-3">
           <p className="text-xs text-[var(--cc-text-dim)] m-0">
             Clue {clueIndex + 1} of {GUARDIAN_SCENARIO.clues.length}
@@ -128,20 +139,17 @@ export default function GuardianMode() {
           <p className="text-sm text-[var(--cc-text-dim)] m-0">
             {PLAYER_LABEL[clue.player]}: when you're holding the device, tap ready.
           </p>
-          <button
-            onClick={readyForClue}
-            className="self-center mt-1 px-5 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11"
-          >
+          <PrimaryButton onClick={readyForClue} className="self-center mt-1">
             I'm {PLAYER_LABEL[clue.player]} — I'm ready
-          </button>
+          </PrimaryButton>
         </Panel>
-      </div>
+      </ScreenShell>
     )
   }
 
   // phase === 'clue'
   return (
-    <div className="flex flex-col gap-6 max-w-lg mx-auto">
+    <ScreenShell maxWidth="max-w-lg">
       <Panel className="flex flex-col gap-3">
         <p className="text-xs text-[var(--cc-text-dim)] m-0">
           {PLAYER_LABEL[clue.player]}'s turn · Clue {clueIndex + 1} of {GUARDIAN_SCENARIO.clues.length}
@@ -175,15 +183,12 @@ export default function GuardianMode() {
               {pendingGuess.correct ? '✅ Correct' : '❌ Not quite'} — this is{' '}
               {clue.isRedFlag ? 'a genuine red flag.' : 'actually a normal detail.'}
             </p>
-            <button
-              onClick={next}
-              className="self-start px-5 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11"
-            >
+            <PrimaryButton onClick={next} className="self-start">
               {isLastClue ? 'Finish' : 'Next clue'}
-            </button>
+            </PrimaryButton>
           </div>
         )}
       </Panel>
-    </div>
+    </ScreenShell>
   )
 }

@@ -143,3 +143,75 @@ export function getTopChains(selectedIds, max = 2) {
   }
   return chains
 }
+
+// A small deterministic shuffle (same seed -> same order every time) so the
+// "switch sides" investigation's multiple-choice option order looks
+// shuffled but never jitters between re-renders for the same persona.
+function hashString(s) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h || 1
+}
+
+function seededShuffle(arr, seed) {
+  const copy = [...arr]
+  let s = seed || 1
+  for (let i = copy.length - 1; i > 0; i--) {
+    s = (s * 2654435761) % 2147483647
+    const j = Math.abs(s) % (i + 1)
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
+export const NOT_ENOUGH_EVIDENCE = 'Not enough evidence'
+
+/**
+ * Multiple-choice "value" options for the switch-sides investigation's
+ * inference step: the real grounded conclusion (from getGroundTruthInferences)
+ * plus a couple of plausible-but-wrong conclusions borrowed from OTHER boost
+ * rules that did NOT fire for this exact selection — so a distractor is
+ * never accidentally also true — plus a standing "Not enough evidence"
+ * option. Returns null if `riskId` isn't actually inferable for this
+ * selection, so a caller can never build a question with no evidence
+ * behind it.
+ */
+export function getInferenceValueOptions(riskId, selectedIds) {
+  const truth = getGroundTruthInferences(selectedIds).find((g) => g.riskId === riskId)
+  if (!truth) return null
+
+  const fired = new Set(firedBoostRules(selectedIds).map((r) => r.id))
+  const candidates = BOOST_RULES.filter((rule) => !fired.has(rule.id) && rule.id !== truth.groundingRuleId)
+  const sameRisk = candidates.filter((r) => riskId in r.risks)
+  const otherRisk = candidates.filter((r) => !(riskId in r.risks))
+  const pool = [...sameRisk, ...otherRisk].map((r) => r.chain[r.chain.length - 1])
+
+  const seed = hashString(`${riskId}|${[...selectedIds].sort().join(',')}`)
+  const distractors = seededShuffle(pool, seed).slice(0, 2)
+  const options = seededShuffle([truth.description, ...distractors, NOT_ENOUGH_EVIDENCE], seed + 7)
+  return { correctValue: truth.description, options }
+}
+
+/**
+ * Which of this persona's posts actually ground a given inferable risk —
+ * the exact categories the fired boost rule's chain refers to (or, absent a
+ * fired rule, the top base-weight-contributing categories). Any post built
+ * from one of these category ids counts as valid supporting evidence.
+ */
+export function getInferenceClueCategoryIds(riskId, selectedIds) {
+  const grounding = explainGrounding(riskId, selectedIds)
+  return grounding.topRule ? grounding.topRule.categories : grounding.topCategories
+}
+
+/**
+ * A deterministic pool of `count` category ids NOT in `selectedIds`, used as
+ * wrong-answer distractor cards in the investigation's "direct facts" step
+ * — so the player has to actually distinguish what this persona posted
+ * from what they didn't, not just click through an all-true list.
+ */
+export function pickDistractorCategories(selectedIds, count) {
+  const selected = new Set(selectedIds)
+  const pool = SHARING_CATEGORIES.map((c) => c.id).filter((id) => !selected.has(id))
+  const seed = hashString([...selectedIds].sort().join(','))
+  return seededShuffle(pool, seed).slice(0, count)
+}

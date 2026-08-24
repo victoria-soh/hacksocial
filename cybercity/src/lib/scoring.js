@@ -161,6 +161,16 @@ export function gradeForScore(score) {
   return { label: 'Needs Practice', icon: '📚' }
 }
 
+// Recovery Rush hub: a 3-tier "how ready is CyberCity for this incident
+// type" label, using the exact same 75/50 thresholds as scoreTierColor
+// above so the label and its color always agree — Vulnerable is always
+// red, Developing always amber, Resilient always green.
+export function responseReadinessLabel(score) {
+  if (score >= 75) return 'Resilient'
+  if (score >= 50) return 'Developing'
+  return 'Vulnerable'
+}
+
 /**
  * score = 100, minus penalties for: accounts permanently lost, accounts left
  * exposed at containment, trap actions taken, and time overrun. Everything

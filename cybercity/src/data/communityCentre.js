@@ -21,6 +21,10 @@ export const RESIDENTS = [
     age: 67,
     description:
       "Auntie May uses WhatsApp every day to stay in touch with family. She isn't comfortable with technical terms and just wants to know what to do.",
+    quote: '"Someone messaged saying they\'re my son and this is their new number. They need money urgently..."',
+    threatCategory: 'Impersonation scam',
+    threatLevel: 'High',
+    accentColor: '#e0a94a',
     channel: 'WhatsApp',
     chat: {
       opening: 'Hi Mum. My phone broke and I lost all my contacts. This is my new number.',
@@ -29,6 +33,7 @@ export const RESIDENTS = [
     strategies: [
       {
         id: 'verify-known-channel',
+        icon: '📞',
         label: "Call her child's original number to check, independently of this new chat",
         correct: true,
         consequence: [
@@ -38,6 +43,7 @@ export const RESIDENTS = [
       },
       {
         id: 'ask-personal-questions',
+        icon: '💬',
         label: 'Reply and ask the sender a few personal questions to check if it\'s really her child',
         correct: false,
         consequence: [
@@ -47,6 +53,7 @@ export const RESIDENTS = [
       },
       {
         id: 'send-money',
+        icon: '💸',
         label: 'Send some money in case it\'s urgent, and sort out the details later',
         correct: false,
         consequence: [
@@ -56,6 +63,7 @@ export const RESIDENTS = [
       },
       {
         id: 'ask-bank-details',
+        icon: '🏦',
         label: "Ask for the child's bank details to confirm it's them",
         correct: false,
         consequence: [
@@ -89,6 +97,10 @@ export const RESIDENTS = [
     age: 52,
     description:
       'Mr Ravi runs a small food stall and accepts QR payments all day. He\'s busy, the queue is long, and he doesn\'t have time to fuss over every customer.',
+    quote: '"A customer says their payment failed and wants me to scan their QR code for a \'refund\'..."',
+    threatCategory: 'QR / payment scam',
+    threatLevel: 'High',
+    accentColor: '#c96b4f',
     channel: 'In person + WhatsApp',
     chat: {
       opening:
@@ -98,6 +110,7 @@ export const RESIDENTS = [
     strategies: [
       {
         id: 'check-own-app',
+        icon: '📱',
         label: "Don't scan any code from the customer — check his own banking app directly to see if a payment actually came in",
         correct: true,
         consequence: [
@@ -107,6 +120,7 @@ export const RESIDENTS = [
       },
       {
         id: 'scan-to-check',
+        icon: '📷',
         label: 'Scan it quickly just to see what happens',
         correct: false,
         consequence: [
@@ -116,6 +130,7 @@ export const RESIDENTS = [
       },
       {
         id: 'ask-more-details',
+        icon: '💬',
         label: 'Ask the customer to explain more about what went wrong',
         correct: false,
         consequence: [
@@ -125,6 +140,7 @@ export const RESIDENTS = [
       },
       {
         id: 'trust-customer-certain',
+        icon: '🤝',
         label: 'Scan it since the customer seems certain and the queue is getting long',
         correct: false,
         consequence: [
@@ -158,6 +174,10 @@ export const RESIDENTS = [
     age: 19,
     description:
       "Sarah is a student applying widely for internships. She's excited and a little anxious about landing one before the semester starts.",
+    quote: '"I got offered an internship, but they want a $150 registration fee and my bank details before the interview..."',
+    threatCategory: 'Job scam',
+    threatLevel: 'Medium',
+    accentColor: '#5eb89c',
     channel: 'WhatsApp',
     chat: {
       opening:
@@ -167,6 +187,7 @@ export const RESIDENTS = [
     strategies: [
       {
         id: 'verify-independently',
+        icon: '🔍',
         label: "Don't pay or share anything — look up the company's official website or LinkedIn independently first",
         correct: true,
         consequence: [
@@ -176,6 +197,7 @@ export const RESIDENTS = [
       },
       {
         id: 'pay-refundable',
+        icon: '💸',
         label: 'Pay the fee since it sounds refundable and the opportunity seems good',
         correct: false,
         consequence: [
@@ -185,6 +207,7 @@ export const RESIDENTS = [
       },
       {
         id: 'ask-for-details',
+        icon: '💬',
         label: 'Reply asking for more details about the role before deciding',
         correct: false,
         consequence: [
@@ -194,6 +217,7 @@ export const RESIDENTS = [
       },
       {
         id: 'send-bank-only',
+        icon: '🏦',
         label: 'Send just the bank account number, since interview details will presumably come after',
         correct: false,
         consequence: [
@@ -227,6 +251,10 @@ export const RESIDENTS = [
     age: 14,
     description:
       'Daniel plays a lot of online games and chats with friends (and strangers) on Discord. He reuses the same password on pretty much everything.',
+    quote: '"Someone in Discord sent me a link for free skins and V-Bucks if I log in through their site..."',
+    threatCategory: 'Account security',
+    threatLevel: 'Medium',
+    accentColor: '#7c93d1',
     channel: 'Discord DM',
     chat: {
       opening:
@@ -236,6 +264,7 @@ export const RESIDENTS = [
     strategies: [
       {
         id: 'go-direct',
+        icon: '🌐',
         label: "Don't log in through the link — go directly to the game's official site or app instead",
         correct: true,
         consequence: [
@@ -245,6 +274,7 @@ export const RESIDENTS = [
       },
       {
         id: 'login-friend-vouches',
+        icon: '🤝',
         label: 'Log in through the link since a friend seems to be recommending it',
         correct: false,
         consequence: [
@@ -254,6 +284,7 @@ export const RESIDENTS = [
       },
       {
         id: 'login-then-logout',
+        icon: '🔁',
         label: 'Log in to claim it, then log out again right away',
         correct: false,
         consequence: [
@@ -263,6 +294,7 @@ export const RESIDENTS = [
       },
       {
         id: 'ask-proof-then-login',
+        icon: '📸',
         label: 'Ask the friend for proof it worked, then log in through the same link',
         correct: false,
         consequence: [

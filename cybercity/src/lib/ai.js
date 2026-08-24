@@ -159,15 +159,14 @@ export async function generateScamExample(difficulty) {
 }
 
 // ---------------------------------------------------------------------------
-// Task 4: Privacy Mirror — layer 2 (generative). This is the ONLY place in
-// the feature that calls a model. It never decides a risk level, an
-// inferable/not verdict, or a matched/missed grade — lib/privacyMirrorEngine.js
-// and lib/privacyMirrorSimilarity.js (layer 1, no model calls, fully
-// deterministic) already decided those. Every function below is handed that
-// decision as structured input and only turns it into a sentence, or
-// generates flavor content (a fictional name, sample posts) inside a rubric
-// layer 1 already fixed. If asked "how does the AI know this is risky?" the
-// honest answer is: it doesn't — the graph does. The model just writes it.
+// Task 4: Privacy Mirror — layer 2 (generative). It never decides a risk
+// level or an inferable/not verdict — lib/privacyMirrorEngine.js (layer 1,
+// no model calls, fully deterministic) already decided that. Each function
+// below is handed that decision as structured input and only turns it into
+// a sentence. (generatePrivacyMirrorPersona below is deterministic too —
+// see its own comment for why.) If asked "how does the AI know this is
+// risky?" the honest answer is: it doesn't — the graph does. The model just
+// writes it.
 function categoryLabel(id) {
   return SHARING_CATEGORIES.find((c) => c.id === id)?.label ?? id
 }
@@ -214,73 +213,22 @@ export async function explainPrivacyMirrorRisk(riskLabel, grounding) {
   }
 }
 
-const PERSONA_SYSTEM_PROMPT = `You invent a short fictional social-media persona for a privacy-education game called CyberCity.
-You will be given a list of "sharing category" labels (things this fictional person posts about) — nothing else. No real person's data is involved.
-Invent a plausible full name, and one short, platform-native sample post per category given (skip the least essential ones if there are more than 5, so you produce between 3 and 5 posts total). Each post should read like something a real person would actually post — casual, short, with an emoji where natural — and clearly relate to its category.
-Respond with ONLY a JSON object: {"name": string, "posts": [{"platform": string, "text": string}]}. No commentary outside the JSON.`
-
-function heuristicGeneratePersona(selectedIds) {
+/**
+ * The switch-sides investigation's grading needs to know exactly which post
+ * came from which sharing category (to check "which post supports this
+ * inference?" answers), so persona posts are always built deterministically
+ * from PERSONA_POST_TEMPLATES — one per selected category, every time —
+ * rather than trusting a model to invent its own post-to-category mapping.
+ * Nothing here calls a model: same input, same persona, every time, which
+ * is also what makes the investigation stage replayable/inspectable.
+ *
+ * selectedIds: the same category ids the player chose in screen 1 — the
+ * ONLY input this persona is conditioned on.
+ */
+export function generatePrivacyMirrorPersona(selectedIds) {
   const seed = hashSelection(selectedIds)
   const name = PERSONA_NAME_POOL[Math.floor(stableRandom(seed) * PERSONA_NAME_POOL.length)]
   const orderedIds = SHARING_CATEGORIES.map((c) => c.id).filter((id) => selectedIds.includes(id))
-  const posts = orderedIds.slice(0, 5).map((id) => PERSONA_POST_TEMPLATES[id])
+  const posts = orderedIds.map((id) => ({ categoryId: id, ...PERSONA_POST_TEMPLATES[id] }))
   return { name, posts }
-}
-
-/** selectedIds: the same category ids the player chose in screen 1 — the ONLY input this persona is conditioned on. */
-export async function generatePrivacyMirrorPersona(selectedIds) {
-  const categoryLabels = selectedIds.map(categoryLabel)
-  try {
-    const text = await callModel({
-      system: PERSONA_SYSTEM_PROMPT,
-      prompt: JSON.stringify({ categories: categoryLabels }),
-      maxTokens: 500,
-    })
-    const parsed = extractJson(text)
-    if (typeof parsed.name === 'string' && Array.isArray(parsed.posts) && parsed.posts.length > 0) {
-      return { name: parsed.name, posts: parsed.posts, source: 'model' }
-    }
-    throw new Error('malformed-response')
-  } catch {
-    return { ...heuristicGeneratePersona(selectedIds), source: 'heuristic' }
-  }
-}
-
-const FEEDBACK_SYSTEM_PROMPT = `You are a calm, encouraging privacy-education coach in a game called CyberCity.
-A player guessed what a fictional persona's daily routine/location might be. You will be given, per inferable fact: its description, whether our own similarity-grading engine already marked it matched or missed (ground truth — do not re-judge or contradict it), and which combination of categories made it inferable.
-Write a short (3-5 sentence) plain-language summary: what the player correctly picked up on, what they missed, and briefly why the missed item was inferable anyway (referencing the actual categories). Encouraging tone, no jargon without explanation. Do not invent facts not present in the input.`
-
-function heuristicExplainFeedback(verdicts) {
-  const matched = verdicts.filter((v) => v.matched)
-  const missed = verdicts.filter((v) => !v.matched)
-  const parts = []
-  if (matched.length > 0) {
-    parts.push(`You picked up on ${matched.map((v) => v.riskLabel.toLowerCase()).join(' and ')} — nice read.`)
-  } else {
-    parts.push("You didn't land on any of it this time — that's exactly why this stuff is easy to miss.")
-  }
-  if (missed.length > 0) {
-    const first = missed[0]
-    parts.push(
-      `You missed ${missed.map((v) => v.riskLabel.toLowerCase()).join(' and ')}: ${first.description.charAt(0).toLowerCase()}${first.description.slice(1)}.`,
-    )
-  } else {
-    parts.push('You caught everything the engine flagged as inferable.')
-  }
-  return parts.join(' ')
-}
-
-/** verdicts: lib/privacyMirrorSimilarity.js's gradeGuess() output — the model only phrases this, never re-grades it. */
-export async function explainPrivacyMirrorFeedback(verdicts, personaName) {
-  try {
-    const prompt = JSON.stringify({
-      personaName,
-      items: verdicts.map((v) => ({ riskLabel: v.riskLabel, description: v.description, matched: v.matched })),
-    })
-    const text = await callModel({ system: FEEDBACK_SYSTEM_PROMPT, prompt, maxTokens: 300 })
-    if (text && text.trim().length > 0) return { text: text.trim(), source: 'model' }
-    throw new Error('empty-response')
-  } catch {
-    return { text: heuristicExplainFeedback(verdicts), source: 'heuristic' }
-  }
 }

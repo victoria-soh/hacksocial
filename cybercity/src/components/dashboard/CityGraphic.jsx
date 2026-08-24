@@ -1,10 +1,31 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { computeCityAtmosphere } from '../../lib/cityAtmosphere'
+import { RESIDENTS } from '../../data/communityCentre'
+import { RECOVERY_LEVELS } from '../../data/recoveryRush'
 import CityGridFloor from './CityGridFloor'
 import CityDrones from './CityDrones'
 import CityWeather from './CityWeather'
 import CityTower from '../shared/CityTower'
+
+// "Missions remaining" per district for the building hover tooltip — each
+// mapped onto whatever discrete units that district's own resilience
+// formula already treats as its components (see GameContext.jsx's
+// computeBreadcrumbsResilience/computeRecoveryResilience/
+// computeCommunityResilience), not a new parallel tracking concept.
+function missionsRemaining(key, districtState) {
+  if (key === 'breadcrumbs') {
+    return (districtState.findAlexComplete ? 0 : 1) + (districtState.privacyDefenceScore == null ? 1 : 0)
+  }
+  if (key === 'recoveryRush') {
+    // `hidden` levels (the capstone-only incident) aren't part of the
+    // regular Recovery Rush level list — see RecoveryRushHub.jsx's own
+    // identical filter — and computeRecoveryResilience never counts them
+    // either, so they shouldn't inflate "missions remaining" here.
+    return RECOVERY_LEVELS.filter((l) => !l.hidden && !districtState.levelsComplete[l.id]).length
+  }
+  return RESIDENTS.filter((r) => !districtState.residents[r.id]?.complete).length
+}
 
 const PROTECTED_THRESHOLD = 60
 const BASE_WIDTH = 520
@@ -321,7 +342,7 @@ export default function CityGraphic({ overallResilience, districts, unlockedLand
             boxShadow: isProtected ? 'var(--cc-glow-good)' : 'var(--cc-glow-danger)',
           }}
         >
-          {isProtected ? '🛡️ CYBERCITY PROTECTED' : '⚠️ CITY UNDER ATTACK'}
+          {isProtected ? `🛡️ CYBERCITY PROTECTED · ${overallResilience}%` : `⚠️ CITY UNDER ATTACK · ${overallResilience}%`}
         </div>
 
         {citizenCount > 0 && (
@@ -348,6 +369,7 @@ export default function CityGraphic({ overallResilience, districts, unlockedLand
             name={d.name}
             to={d.to}
             resilience={districts[d.key].resilience}
+            missionsLeft={missionsRemaining(d.key, districts[d.key])}
             locked={d.key === 'communityCentre' ? !districts.communityCentre.unlocked : false}
           />
         ))}
@@ -435,7 +457,33 @@ function Billboard({ x, y, atmosphere, seed }) {
   )
 }
 
-function DistrictBuilding({ icon, name, to, resilience, locked }) {
+// A small hover/focus tooltip — the same name/resilience/missions-remaining
+// facts already available elsewhere on the page (the aria-label, the text
+// toggle), surfaced right at the point of interaction instead of requiring
+// a click to find out what a building represents.
+function BuildingTooltip({ name, resilience, missionsLeft, locked }) {
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[160px] rounded-lg px-2.5 py-1.5 text-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 z-10"
+      style={{ background: 'var(--cc-bg-alt)', border: '1px solid var(--cc-panel-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+    >
+      <p className="text-xs font-semibold m-0">{name}</p>
+      {locked ? (
+        <p className="text-[10px] text-[var(--cc-text-dim)] m-0">Locked</p>
+      ) : (
+        <>
+          <p className="text-[10px] text-[var(--cc-text-dim)] m-0">Resilience: {resilience}%</p>
+          <p className="text-[10px] text-[var(--cc-text-dim)] m-0">
+            {missionsLeft > 0 ? `${missionsLeft} mission${missionsLeft === 1 ? '' : 's'} remaining` : 'All missions complete'}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function DistrictBuilding({ icon, name, to, resilience, missionsLeft, locked }) {
   const litFraction = locked ? 0 : resilience / 100
 
   const body = (
@@ -459,7 +507,8 @@ function DistrictBuilding({ icon, name, to, resilience, locked }) {
 
   if (locked) {
     return (
-      <div aria-disabled="true" aria-label={`${name}, locked`} className="cursor-not-allowed opacity-80">
+      <div aria-disabled="true" aria-label={`${name}, locked`} className="group relative cursor-not-allowed opacity-80">
+        <BuildingTooltip name={name} locked />
         {body}
       </div>
     )
@@ -468,9 +517,10 @@ function DistrictBuilding({ icon, name, to, resilience, locked }) {
   return (
     <Link
       to={to}
-      className="no-underline rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-accent)]"
-      aria-label={`Enter ${name} — resilience ${resilience}%`}
+      className="group relative no-underline rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-accent)]"
+      aria-label={`Enter ${name} — resilience ${resilience}%, ${missionsLeft} mission${missionsLeft === 1 ? '' : 's'} remaining`}
     >
+      <BuildingTooltip name={name} resilience={resilience} missionsLeft={missionsLeft} />
       {body}
     </Link>
   )

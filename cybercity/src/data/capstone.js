@@ -90,6 +90,7 @@ export const CAPSTONE_COMMS_SCENARIO = {
   strategies: [
     {
       id: 'plain-explanation',
+      icon: '💡',
       label: 'Explain plainly what happened and give one clear next step',
       correct: true,
       consequence: [
@@ -99,6 +100,7 @@ export const CAPSTONE_COMMS_SCENARIO = {
     },
     {
       id: 'no-details',
+      icon: '🙈',
       label: "Just say it's fixed now, no need to worry about the details",
       correct: false,
       consequence: [
@@ -108,6 +110,7 @@ export const CAPSTONE_COMMS_SCENARIO = {
     },
     {
       id: 'jargon-explanation',
+      icon: '🤓',
       label: 'Give a fully technical explanation of exactly what occurred',
       correct: false,
       consequence: [
@@ -117,6 +120,7 @@ export const CAPSTONE_COMMS_SCENARIO = {
     },
     {
       id: 'blame-jordan',
+      icon: '👉',
       label: 'Point out that this happened because Jordan reused a password',
       correct: false,
       consequence: [

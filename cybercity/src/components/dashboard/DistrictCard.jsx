@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
-import ProgressBar from '../shared/ProgressBar'
 import Panel from '../shared/Panel'
 
-export default function DistrictCard({ icon, name, resilience, to, locked, blurb }) {
+// Resilience itself is no longer shown here — the city graphic above is
+// now the one primary representation of it (see CityDashboard.jsx); this
+// card's job is just navigation + a one-line description of the district.
+export default function DistrictCard({ icon, name, to, locked, blurb }) {
   const content = (
     <Panel className={`h-full flex flex-col gap-3 ${locked ? 'opacity-60' : 'hover:border-[var(--cc-accent)] transition-colors'}`}>
       <div className="flex items-center justify-between">
@@ -16,7 +18,6 @@ export default function DistrictCard({ icon, name, resilience, to, locked, blurb
         )}
       </div>
       <p className="text-sm text-[var(--cc-text-dim)] m-0">{blurb}</p>
-      <ProgressBar label={`${name} resilience`} value={resilience} />
     </Panel>
   )
 

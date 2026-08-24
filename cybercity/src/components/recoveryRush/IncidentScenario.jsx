@@ -4,6 +4,7 @@ import { getLevel } from '../../data/recoveryRush'
 import { isRecoveryLevelUnlocked, requiredLevelForRecoveryLevel } from '../../data/levels'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
+import PrimaryButton from '../shared/PrimaryButton'
 import IncidentEngine from './IncidentEngine'
 import EndScreen from './EndScreen'
 
@@ -39,12 +40,9 @@ export default function IncidentScenario() {
         <p className="text-sm text-[var(--cc-text-dim)] m-0">
           Unlocks at Level {gate?.level} ({gate?.name}).
         </p>
-        <button
-          onClick={() => navigate('/recovery-rush')}
-          className="self-center mt-2 px-4 py-2.5 rounded-lg border border-[var(--cc-panel-border)] text-sm min-h-11"
-        >
+        <PrimaryButton onClick={() => navigate('/recovery-rush')} className="self-center mt-2">
           Back to Recovery Rush
-        </button>
+        </PrimaryButton>
       </Panel>
     )
   }
