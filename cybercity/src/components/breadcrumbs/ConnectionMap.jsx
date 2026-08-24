@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 
 const TIER_X = { 0: 60, 1: 340, 2: 620 }
@@ -18,23 +18,37 @@ const SPARKS = SPARK_ANGLES.map((deg) => {
 })
 
 // Generic case-board layout: evidence (tier 0) -> facts (tier 1) -> inferences
-// (tier 2). Driven entirely by the `posts`/`nodes`/`edges` props so this
-// same board renders both the full "Find Alex" mission and the smaller
-// capstone deduction stage without any target-specific code in here.
-function buildLayout(posts, nodes) {
+// (tier 2). Driven entirely by the `posts`/`nodes` props (for label/type
+// lookups) plus `visibleOrder` (which ids actually get a slot, and in what
+// order) so this same board renders both the full "Find Alex" mission's
+// progressively-revealed board and the capstone's smaller, fully-visible
+// deduction stage. Position within a tier is assigned by each id's position
+// in `visibleOrder`, NOT by fixed dictionary order — that's what keeps
+// already-placed nodes from visually jumping around as new ones are
+// revealed (a node revealed later always appends after nodes already on
+// the board, never inserts above one that's already there).
+function buildLayout(posts, nodes, visibleOrder) {
   const positions = {}
-  const evidenceIds = posts.map((p) => p.id)
-  evidenceIds.forEach((id, i) => {
-    positions[id] = { x: TIER_X[0], y: 30 + i * ROW_HEIGHT, tier: 0 }
-  })
-  const factIds = Object.entries(nodes).filter(([, n]) => n.type === 'fact').map(([id]) => id)
-  factIds.forEach((id, i) => {
-    positions[id] = { x: TIER_X[1], y: 30 + i * ROW_HEIGHT, tier: 1, index: i, columnName: 'Facts' }
-  })
-  const inferenceIds = Object.entries(nodes).filter(([, n]) => n.type === 'inference').map(([id]) => id)
-  inferenceIds.forEach((id, i) => {
-    positions[id] = { x: TIER_X[2], y: 20 + i * (ROW_HEIGHT * 1.15), tier: 2, index: i, columnName: 'Inferences' }
-  })
+  let evidenceIndex = 0
+  let factIndex = 0
+  let inferenceIndex = 0
+  for (const id of visibleOrder) {
+    const isEvidence = posts.some((p) => p.id === id)
+    if (isEvidence) {
+      positions[id] = { x: TIER_X[0], y: 30 + evidenceIndex * ROW_HEIGHT, tier: 0 }
+      evidenceIndex += 1
+      continue
+    }
+    const node = nodes[id]
+    if (!node) continue
+    if (node.type === 'fact') {
+      positions[id] = { x: TIER_X[1], y: 30 + factIndex * ROW_HEIGHT, tier: 1, index: factIndex, columnName: 'Facts' }
+      factIndex += 1
+    } else {
+      positions[id] = { x: TIER_X[2], y: 20 + inferenceIndex * (ROW_HEIGHT * 1.15), tier: 2, index: inferenceIndex, columnName: 'Inferences' }
+      inferenceIndex += 1
+    }
+  }
   return positions
 }
 
@@ -91,13 +105,47 @@ export default function ConnectionMap({
   // opened in the feed above and are therefore valid drag/select sources.
   // Omitted entirely (e.g. by the capstone's smaller deduction stage) means
   // every evidence post is already usable, preserving that context's
-  // existing behavior unchanged.
+  // existing behavior unchanged — see the `progressive` branch below.
   openedIds = null,
+  // First-connection walkthrough (Find Alex only): the one evidence node
+  // and one fact/inference node to visually call out while the player has
+  // not yet made their first connection. Both null once the guided chain
+  // completes, or when unused by a caller (e.g. the capstone stage).
+  guidedSourceId = null,
+  guidedTargetId = null,
 }) {
   const reducedMotion = usePrefersReducedMotion()
   const svgRef = useRef(null)
-  const LAYOUT = useMemo(() => buildLayout(posts, nodes), [posts, nodes])
-  const SVG_HEIGHT = useMemo(() => Math.max(...Object.values(LAYOUT).map((p) => p.y)) + 70, [LAYOUT])
+
+  // Persists across renders (append-only) so the board's layout only ever
+  // grows — a node already on the board never gets reshuffled just because
+  // a different node became visible. When `openedIds` is omitted (capstone),
+  // everything is visible from the first render, matching the old behavior.
+  const visibleOrderRef = useRef([])
+  const progressive = openedIds !== null
+  let visibleOrder
+  if (progressive) {
+    const seen = new Set(visibleOrderRef.current)
+    for (const id of openedIds) {
+      if (!seen.has(id)) {
+        visibleOrderRef.current.push(id)
+        seen.add(id)
+      }
+    }
+    for (const edge of edges) {
+      if (seen.has(edge.to)) continue
+      const ready = edge.from.some((src) => openedIds.has(src) || unlockedNodeIds.has(src))
+      if (ready) {
+        visibleOrderRef.current.push(edge.to)
+        seen.add(edge.to)
+      }
+    }
+    visibleOrder = visibleOrderRef.current
+  } else {
+    visibleOrder = [...posts.map((p) => p.id), ...Object.keys(nodes)]
+  }
+
+  const LAYOUT = buildLayout(posts, nodes, visibleOrder)
   const nodeIds = Object.keys(LAYOUT)
 
   function nodeLabel(id) {
@@ -249,6 +297,22 @@ export default function ConnectionMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDragActive])
 
+  // Progressive disclosure: nothing on the board yet — a pre-drawn empty
+  // worksheet of locked slots would give away the whole shape of the case
+  // before the player has done anything. Once the first post is opened,
+  // the board starts growing from here instead.
+  if (nodeIds.length === 0) {
+    return (
+      <div className="text-center py-10 px-4">
+        <p className="text-sm text-[var(--cc-text-dim)] m-0">
+          No evidence collected yet. Open a post to begin investigating Alex.
+        </p>
+      </div>
+    )
+  }
+
+  const SVG_HEIGHT = Math.max(...Object.values(LAYOUT).map((p) => p.y)) + 70
+
   return (
     <div className="overflow-x-auto">
       <svg
@@ -390,6 +454,8 @@ export default function ConnectionMap({
             dragging?.moved && !unlocked && edge?.from.includes(dragging.sourceId)
           const isErroring = shakingTargetId === id
           const isPopping = poppingTargetId === id
+          const isGuidedSource = id === guidedSourceId
+          const isGuidedTarget = id === guidedTargetId
 
           const fill = selected
             ? 'var(--cc-accent-2)'
@@ -452,6 +518,40 @@ export default function ConnectionMap({
               aria-label={ariaLabel}
               style={{ cursor: draggable ? 'grab' : isEvidence && !unlocked ? 'not-allowed' : 'pointer', touchAction: 'none' }}
             >
+              {/* First-connection walkthrough: a dashed focus-colored halo
+                  around whichever one node the player should act on next,
+                  distinct from every in-game status color so it never reads
+                  as game state. Cleared for good once the guided chain
+                  resolves — see FindAlexMission's tutorialActive. */}
+              {(isGuidedSource || isGuidedTarget) && (
+                <>
+                  <rect
+                    x="-5"
+                    y="-5"
+                    width={COL_WIDTH - 16 + 10}
+                    height="42"
+                    rx="11"
+                    fill="none"
+                    stroke="var(--cc-focus)"
+                    strokeWidth="2"
+                    strokeDasharray="4 3"
+                    className="cc-pulse"
+                    aria-hidden="true"
+                  />
+                  <text
+                    x={(COL_WIDTH - 16) / 2}
+                    y="-11"
+                    textAnchor="middle"
+                    fontSize="10"
+                    fontWeight="700"
+                    fill="var(--cc-focus)"
+                    className="cc-chrome"
+                    aria-hidden="true"
+                  >
+                    {isGuidedSource ? '👉 Start here' : '👉 Drop it here'}
+                  </text>
+                </>
+              )}
               <g className={[isPopping && 'cc-pin-pop', isErroring && 'cc-node-error-shake'].filter(Boolean).join(' ') || undefined}>
                 <rect
                   className={isErroring ? 'cc-node-error-rect' : undefined}

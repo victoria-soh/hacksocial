@@ -18,6 +18,23 @@ function formatElapsed(totalSeconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+// The merged "Case Progress" panel's headline fields — a curated subset of
+// BREADCRUMB_NODES (not all 11), matching the fields a player would
+// actually want tracked at a glance. Each maps to one node id already in
+// the data model; no data-model changes needed to support this.
+const DOSSIER_FIELDS = [
+  { nodeId: 'fact-age', label: 'Age' },
+  { nodeId: 'fact-employer', label: 'Employer' },
+  { nodeId: 'inf-office-location', label: 'Work Area' },
+  { nodeId: 'inf-home-area', label: 'Home Area' },
+  { nodeId: 'inf-daily-commute', label: 'Routine' },
+]
+
+// The very first connection the player can make (BREADCRUMB_EDGES[0]) is
+// walked through interactively instead of via the instructional paragraph
+// alone — see the guided* derivations in FindAlexPlaythrough below.
+const GUIDED_EDGE = BREADCRUMB_EDGES[0]
+
 /**
  * Thin wrapper that owns only what must survive a replay: which mode the
  * next playthrough runs in, and a key that forces a full remount of
@@ -52,6 +69,46 @@ function FindAlexPlaythrough({ mode, onReplay }) {
   const navigate = useNavigate()
 
   const isDetective = mode === 'detective'
+
+  // Stranger Knowledge explanation + escalating framing (feature 4), and the
+  // ×2/×3 corroboration combo callout (feature 5) — both driven off the same
+  // event: a new node just resolved on the case board. `prevExposureRef`
+  // tracks the last percent this effect actually reacted to, so the
+  // explanation only appears when the displayed percentage genuinely moved,
+  // never on a rounding no-op.
+  const prevExposureRef = useRef(0)
+  const [revealNotice, setRevealNotice] = useState(null) // { key, reason }
+  const [comboNotice, setComboNotice] = useState(null) // { key, count, points, label }
+  const exposurePercent = computeExposurePercent(board.unlockedNodeIds, BREADCRUMB_NODES)
+
+  useEffect(() => {
+    if (board.unlockOrder.length === 0) return
+    const newestId = board.unlockOrder[board.unlockOrder.length - 1]
+    const node = BREADCRUMB_NODES[newestId]
+    if (exposurePercent > prevExposureRef.current) {
+      setRevealNotice({ key: `${newestId}-${board.unlockOrder.length}`, reason: `You now know: Alex ${node.dossierFragment}.` })
+    }
+    prevExposureRef.current = exposurePercent
+
+    const edge = BREADCRUMB_EDGES.find((e) => e.to === newestId)
+    if (edge && edge.from.length > 1) {
+      setComboNotice({ key: `${edge.id}-${Date.now()}`, count: edge.from.length, points: edge.points, label: node.label })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board.unlockOrder.length])
+
+  useEffect(() => {
+    if (!comboNotice) return undefined
+    const t = setTimeout(() => setComboNotice(null), 4200)
+    return () => clearTimeout(t)
+  }, [comboNotice])
+
+  // First-connection walkthrough (feature 3): active until the one guided
+  // edge resolves, then never again for this playthrough.
+  const tutorialActive = !board.completedEdgeIds.has(GUIDED_EDGE.id)
+  const guidedPostId = GUIDED_EDGE.from[0]
+  const guidedTargetId = GUIDED_EDGE.to
+  const guidedPostOpened = openedIds.has(guidedPostId)
 
   // Detective Mode timer: starts the moment the real mission view appears
   // (after boot-up), not during boot-up itself. No-penalty retries are
@@ -185,8 +242,6 @@ function FindAlexPlaythrough({ mode, onReplay }) {
     )
   }
 
-  const exposurePercent = computeExposurePercent(board.unlockedNodeIds, BREADCRUMB_NODES)
-
   return (
     <div className="flex flex-col gap-6 cc-alert-entrance">
       <div aria-live="assertive" className="sr-only">
@@ -206,24 +261,54 @@ function FindAlexPlaythrough({ mode, onReplay }) {
           )}
         </h1>
         <p className="text-[var(--cc-text-dim)] m-0">
-          "Alex" is a fictional practice profile built for this game. Open a post below, then drag a clue onto a slot
-          on the case board to connect it — or select clue(s) then activate a slot with Enter/Space. Score:{' '}
-          {board.score} points.
+          "Alex" is a fictional practice profile built for this game. Score: {board.score} points.
         </p>
+        {/* First-connection walkthrough: a short, stage-specific nudge
+            replaces the old paragraph that explained the whole drag/select
+            mechanic upfront — the guided highlights below teach it instead,
+            and this line disappears for good once that first chain resolves. */}
+        {tutorialActive && (
+          <p className="text-sm font-semibold m-0 mt-1" style={{ color: 'var(--cc-focus)' }}>
+            {guidedPostOpened
+              ? '👉 Drag the glowing clue onto the pulsing slot below to connect it (or select it, then press Enter/Space on the slot).'
+              : '👉 Open the highlighted post below — it holds your first clue.'}
+          </p>
+        )}
       </div>
 
-      <ExposureMeter percent={exposurePercent} />
+      {comboNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="cc-achievement-pop cc-hud-panel relative flex items-center gap-3 rounded-2xl border p-4"
+          style={{ background: 'var(--cc-panel)', borderColor: 'var(--cc-accent-2)', boxShadow: 'var(--cc-glow-magenta)' }}
+        >
+          <span className="cc-achievement-icon text-3xl shrink-0" aria-hidden="true">🔗</span>
+          <div>
+            <p className="cc-chrome text-xs uppercase tracking-wide m-0" style={{ color: 'var(--cc-accent-2)' }}>
+              {comboNotice.count}-Clue {comboNotice.count === 3 ? 'Inference' : 'Connection'}!
+            </p>
+            <p className="font-bold m-0 mt-0.5">+{comboNotice.points} XP — "{comboNotice.label}"</p>
+            <p className="text-sm text-[var(--cc-text-dim)] m-0 mt-0.5">
+              You corroborated {comboNotice.count} independent clues to reach this conclusion.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <ExposureMeter percent={exposurePercent} revealReason={revealNotice?.reason} revealKey={revealNotice?.key} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px] items-start min-w-0">
         <div className="flex flex-col gap-4 min-w-0">
-          <EvidenceFeed posts={ALEX_POSTS} openedIds={openedIds} onOpen={openEvidence} />
+          <EvidenceFeed
+            posts={ALEX_POSTS}
+            openedIds={openedIds}
+            onOpen={openEvidence}
+            guidedPostId={tutorialActive && !guidedPostOpened ? guidedPostId : null}
+          />
 
           <Panel className="cc-circuit-texture">
             <h2 className="text-base font-semibold mt-0">Case board</h2>
-            <p className="text-xs text-[var(--cc-text-dim)] mt-0 mb-2">
-              Press and drag a clue onto a slot to connect it. Keyboard: select clue(s) with Enter/Space, then
-              activate a slot the same way.
-            </p>
             <ConnectionMap
               posts={ALEX_POSTS}
               nodes={BREADCRUMB_NODES}
@@ -236,6 +321,8 @@ function FindAlexPlaythrough({ mode, onReplay }) {
               onToggleSelect={board.toggleSelect}
               onAttempt={board.attemptConnection}
               openedIds={openedIds}
+              guidedSourceId={tutorialActive && guidedPostOpened ? guidedPostId : null}
+              guidedTargetId={tutorialActive && guidedPostOpened ? guidedTargetId : null}
             />
           </Panel>
         </div>
@@ -245,6 +332,7 @@ function FindAlexPlaythrough({ mode, onReplay }) {
           nodes={BREADCRUMB_NODES}
           name="Alex"
           subtitle={board.unlockOrder.includes('fact-age') ? 'Alex, ~20' : 'Alex'}
+          fields={DOSSIER_FIELDS}
         />
       </div>
 

@@ -9,11 +9,12 @@ import Panel from '../shared/Panel'
  * Opening is one-directional — there's nothing to hide again, matching how
  * every other reveal in this mission works.
  */
-export default function EvidenceFeed({ posts, openedIds, onOpen }) {
+export default function EvidenceFeed({ posts, openedIds, onOpen, guidedPostId = null }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {posts.map((post) => {
         const opened = openedIds.has(post.id)
+        const isGuided = !opened && post.id === guidedPostId
         return (
           <Panel
             key={post.id}
@@ -21,7 +22,17 @@ export default function EvidenceFeed({ posts, openedIds, onOpen }) {
             onClick={opened ? undefined : () => onOpen(post.id)}
             aria-expanded={opened ? undefined : false}
             className="text-left w-full"
+            style={isGuided ? { borderColor: 'var(--cc-focus)', boxShadow: '0 0 14px rgba(255, 212, 0, 0.5)' } : undefined}
           >
+            {isGuided && (
+              <span
+                className="cc-pulse absolute -top-2 -right-2 text-[10px] font-bold px-2 py-0.5 rounded-full cc-chrome"
+                style={{ background: 'var(--cc-focus)', color: '#3a2e00' }}
+                aria-hidden="true"
+              >
+                👉 Start here
+              </span>
+            )}
             <div className="flex items-center gap-2 mb-1">
               <span
                 aria-hidden="true"

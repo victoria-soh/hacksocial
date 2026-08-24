@@ -14,21 +14,39 @@ function buildLines(unlockOrder, nodes, name) {
     .filter(Boolean)
 }
 
+// A node's `label` is already a short "Field: value" string (see
+// data/breadcrumbs.js) — reused here rather than inventing separate
+// short-display copy per field. Falls back to the whole label for the rare
+// node whose label has no colon.
+function shortValue(node) {
+  const idx = node.label.indexOf(': ')
+  return idx === -1 ? node.label : node.label.slice(idx + 2)
+}
+
 /**
  * Generic "what a stranger has pieced together" profile panel — driven by
  * `nodes` (dossierFragment per revealed node id) and `unlockOrder`, so the
  * same component renders both the Find Alex mission's dossier and the
  * capstone deduction stage's smaller one.
  *
- * Each NEW line types out character-by-character, like a terminal
+ * `fields` (optional) merges in a structured "case progress" summary above
+ * the narrative lines — a fixed list of `{ nodeId, label }` headline facts
+ * (Age, Employer, ...) shown as "???" until that node is unlocked, plus a
+ * running "N / total uncovered" count. This is what replaces the need for
+ * a separate objectives checklist: omitted entirely (e.g. by the capstone's
+ * smaller stage), this panel behaves exactly as it always has.
+ *
+ * Each NEW narrative line types out character-by-character, like a terminal
  * compiling a profile live, with a blinking cursor parked at the end of
  * the dossier throughout. Whatever was already unlocked when this mounts
  * (or reduced motion is on) just fades in instead — there's nothing "new"
  * happening in that case, so nothing types.
  */
-export default function Dossier({ unlockOrder, nodes, name, subtitle, icon = '🧑', emptyMessage }) {
+export default function Dossier({ unlockOrder, nodes, name, subtitle, icon = '🧑', emptyMessage, fields = null }) {
   const reducedMotion = usePrefersReducedMotion()
   const lines = buildLines(unlockOrder, nodes, name)
+  const unlockedSet = new Set(unlockOrder)
+  const revealedFieldCount = fields ? fields.filter((f) => unlockedSet.has(f.nodeId)).length : 0
 
   const [typingLineId, setTypingLineId] = useState(null)
   const [typedChars, setTypedChars] = useState(0)
@@ -82,6 +100,35 @@ export default function Dossier({ unlockOrder, nodes, name, subtitle, icon = '�
           <p className="text-xs text-[var(--cc-text-dim)] m-0">What a stranger has pieced together so far</p>
         </div>
       </div>
+
+      {fields && (
+        <div className="flex flex-col gap-1.5 pb-3 border-b border-[var(--cc-panel-border)]">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wide m-0" style={{ color: 'var(--cc-text-dim)' }}>
+              Case progress
+            </h3>
+            <span className="text-xs font-bold cc-chrome shrink-0" style={{ color: 'var(--cc-accent)' }}>
+              {revealedFieldCount} / {fields.length} uncovered
+            </span>
+          </div>
+          <ul className="list-none p-0 m-0 flex flex-col gap-1">
+            {fields.map((f) => {
+              const revealed = unlockedSet.has(f.nodeId)
+              return (
+                <li key={f.nodeId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-[var(--cc-text-dim)]">{f.label}</span>
+                  <span
+                    className={revealed ? 'font-semibold text-right' : 'text-right'}
+                    style={{ color: revealed ? 'var(--cc-text)' : 'var(--cc-text-dim)' }}
+                  >
+                    {revealed ? shortValue(nodes[f.nodeId]) : '???'}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       {lines.length === 0 ? (
         <p className="text-sm text-[var(--cc-text-dim)] m-0">
