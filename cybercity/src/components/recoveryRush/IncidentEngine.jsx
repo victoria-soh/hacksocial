@@ -19,6 +19,7 @@ import IncidentAlertIntro from './IncidentAlertIntro'
 import AmbientTension from './AmbientTension'
 
 const STATUS_TAG = { compromised: '🔴 COMPROMISED', 'at-risk': '🟡 AT RISK', secured: '🟢 SECURED' }
+const BLAST_CUE_MS = 600
 
 /**
  * The Recovery Rush timer/action-menu/diagram engine, extracted out of the
@@ -29,6 +30,12 @@ const STATUS_TAG = { compromised: '🔴 COMPROMISED', 'at-risk': '🟡 AT RISK',
  * what happens after that (persistence, an EndScreen, a capstone summary)
  * is entirely up to the caller, which is what makes this reusable across
  * both contexts.
+ *
+ * Layout note: everything in the 'running' phase (map, log, actions) is
+ * built to fit a single desktop viewport with no scrolling — breaking that
+ * up during a timed scenario kills the urgency this screen is meant to
+ * create. Only the incident log gets its own internal scroll, since it
+ * accumulates indefinitely; the page itself never does.
  */
 export default function IncidentEngine({ levelId, onComplete }) {
   const level = getLevel(levelId)
@@ -36,6 +43,8 @@ export default function IncidentEngine({ levelId, onComplete }) {
   const [runState, setRunState] = useState(() => createInitialRunState(levelId))
   const [realSeconds, setRealSeconds] = useState(0)
   const [blastHistory, setBlastHistory] = useState([])
+  const [lastResult, setLastResult] = useState(null) // { actionId, resultText }
+  const [blastCue, setBlastCue] = useState(null) // 'grow' | 'shrink' | null
   const concludedRef = useRef(false)
 
   const runStateRef = useRef(runState)
@@ -69,7 +78,14 @@ export default function IncidentEngine({ levelId, onComplete }) {
 
   function recordBlast(state) {
     const value = computeBlastRadius(state)
-    setBlastHistory((prev) => (prev[prev.length - 1] === value ? prev : [...prev, value]))
+    setBlastHistory((prev) => {
+      if (prev[prev.length - 1] === value) return prev
+      if (prev.length > 0) {
+        setBlastCue(value > prev[prev.length - 1] ? 'grow' : 'shrink')
+        setTimeout(() => setBlastCue(null), BLAST_CUE_MS)
+      }
+      return [...prev, value]
+    })
   }
 
   function begin() {
@@ -77,6 +93,7 @@ export default function IncidentEngine({ levelId, onComplete }) {
     setRunState(fresh)
     setRealSeconds(0)
     setBlastHistory([computeBlastRadius(fresh)])
+    setLastResult(null)
     setPhase('running')
   }
 
@@ -86,6 +103,8 @@ export default function IncidentEngine({ levelId, onComplete }) {
     const updated = applyDueEvents(afterAction, combined)
     setRunState(updated)
     recordBlast(updated)
+    const justLogged = updated.log[updated.log.length - 1]
+    setLastResult({ actionId, resultText: justLogged.resultText })
     if (isContained(updated)) {
       endScenario(updated, true)
     } else if (combined >= level.timeLimitSeconds) {
@@ -115,73 +134,85 @@ export default function IncidentEngine({ levelId, onComplete }) {
     (a, b) => a.atSeconds - b.atSeconds,
   )
 
-  // Exposure "temperature": a continuous red-to-green blend + size/glow scale
-  // driven by how much of the original exposure is still outstanding, not a
-  // flat static number.
   const initialExposure = blastHistory[0] || 1
   const exposureRatio = Math.max(0, Math.min(1, blastRadius / initialExposure))
   const gaugeColor = `color-mix(in srgb, var(--cc-danger) ${Math.round(exposureRatio * 100)}%, var(--cc-good))`
-  const gaugeSize = 1.75 + exposureRatio * 1.75 // rem
+  const timerDanger = remaining <= 30
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       <AmbientTension />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold m-0">{level.name}</h1>
+        <h1 className="text-lg sm:text-xl font-bold m-0">{level.name}</h1>
         <div
-          className={`cc-chrome text-2xl font-bold ${remaining <= 30 ? 'text-[var(--cc-danger)]' : 'text-[var(--cc-text)]'}`}
+          className="cc-lcd"
           role="timer"
           aria-label={`Time remaining: ${formatTime(remaining)}`}
-          style={remaining <= 30 ? { textShadow: 'var(--cc-glow-danger)' } : undefined}
+          style={{ color: timerDanger ? 'var(--cc-danger)' : 'var(--cc-accent)' }}
         >
-          ⏱️ {formatTime(remaining)}
+          <span className="text-xl font-bold" style={{ textShadow: timerDanger ? 'var(--cc-glow-danger)' : 'var(--cc-glow-cyan)' }}>
+            ⏱️ {formatTime(remaining)}
+          </span>
         </div>
       </div>
 
-      <Panel className="text-center">
-        <p className="text-sm text-[var(--cc-text-dim)] mb-1">Accounts still exposed</p>
-        <p className="m-0 cc-chrome font-bold transition-[color,font-size] duration-500" style={{ color: gaugeColor, fontSize: `${gaugeSize}rem`, textShadow: `0 0 ${8 + exposureRatio * 20}px ${gaugeColor}` }}>
-          {blastRadius === 0 ? 'CONTAINED' : blastRadius}
-        </p>
-        <p className="text-xs text-[var(--cc-text-dim)] mt-1 mb-0">
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
+        style={{ borderColor: 'var(--cc-panel-border)', background: 'var(--cc-bg-alt)' }}
+      >
+        <span className="text-[11px] text-[var(--cc-text-dim)] cc-chrome font-bold tracking-wide">ACCOUNTS EXPOSED</span>
+        <span
+          className={`cc-lcd ${blastCue === 'grow' ? 'cc-node-error-shake' : ''} ${blastCue === 'shrink' ? 'cc-blast-shrink' : ''}`}
+          style={{ color: gaugeColor }}
+        >
+          <span className="text-base font-bold" style={{ textShadow: `0 0 8px ${gaugeColor}` }}>
+            {blastRadius === 0 ? 'CONTAINED' : blastRadius}
+          </span>
+        </span>
+        <span className="text-[10px] text-[var(--cc-text-dim)] cc-chrome hidden md:inline">
           {blastHistory.join(' → ')}
           {blastRadius === 0 && ' → CONTAINED'}
-        </p>
-      </Panel>
+        </span>
+      </div>
 
-      <Panel>
-        <h2 className="text-base font-semibold mt-0 mb-3">Account status</h2>
-        <BlastRadiusDiagram graph={level.graph} rootId={level.rootId} nodes={runState.nodes} forwardingActive={runState.forwardingActive} />
-        {/* Same information as the diagram above, available as text without visually duplicating it. */}
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer text-[var(--cc-text-dim)] select-none">View account status as text</summary>
-          <ul className="list-none p-0 m-0 mt-2 flex flex-col gap-1.5">
-            {level.graph.nodes.map((n) => (
-              <li key={n.id} className="flex justify-between border-b border-[var(--cc-panel-border)] pb-1.5">
-                <span>
-                  <span aria-hidden="true">{n.icon}</span> {n.label}
-                </span>
-                <span>{STATUS_TAG[runState.nodes[n.id].status]}</span>
-              </li>
-            ))}
-            {runState.forwardingActive && (
-              <li className="text-[var(--cc-warn)]">⚠️ Email forwarding rule still active on {level.rootId}</li>
-            )}
-          </ul>
-        </details>
-      </Panel>
+      <div className="grid gap-2 lg:grid-cols-[1.5fr_1fr] min-h-0">
+        <Panel className="!p-2.5">
+          <h2 className="text-sm font-semibold mt-0 mb-2 cc-chrome">Account map</h2>
+          <BlastRadiusDiagram graph={level.graph} rootId={level.rootId} nodes={runState.nodes} forwardingActive={runState.forwardingActive} />
+          {/* Same information as the diagram above, available as text without visually duplicating it — closed by default so it never costs vertical space. */}
+          <details className="mt-2 text-xs">
+            <summary className="cursor-pointer text-[var(--cc-text-dim)] select-none">View account status as text</summary>
+            <ul className="list-none p-0 m-0 mt-2 flex flex-col gap-1">
+              {level.graph.nodes.map((n) => (
+                <li key={n.id} className="flex justify-between border-b border-[var(--cc-panel-border)] pb-1">
+                  <span>
+                    <span aria-hidden="true">{n.icon}</span> {n.label}
+                  </span>
+                  <span>{STATUS_TAG[runState.nodes[n.id].status]}</span>
+                </li>
+              ))}
+              {runState.forwardingActive && (
+                <li className="text-[var(--cc-warn)]">⚠️ Email forwarding rule still active on {level.rootId}</li>
+              )}
+            </ul>
+          </details>
+        </Panel>
 
-      <Panel>
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-semibold m-0">Activity feed</h2>
-          <LiveIndicator />
-        </div>
-        <EventFeed events={firedEvents} />
-      </Panel>
+        <Panel className="!p-2.5 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <h2 className="text-sm font-semibold m-0 cc-chrome">Live incident log</h2>
+            <LiveIndicator />
+          </div>
+          <div className="overflow-y-auto min-h-0 pr-1" style={{ maxHeight: '280px' }}>
+            <EventFeed events={firedEvents} />
+          </div>
+        </Panel>
+      </div>
 
-      <Panel>
-        <h2 className="text-base font-semibold mt-0 mb-3">What do you do?</h2>
-        <ActionMenu onAction={handleAction} disabled={phase !== 'running'} />
+      <Panel className="!p-2.5">
+        <h2 className="text-sm font-semibold mt-0 mb-2 cc-chrome">What do you do?</h2>
+        <ActionMenu onAction={handleAction} disabled={phase !== 'running'} lastResult={lastResult} />
       </Panel>
     </div>
   )

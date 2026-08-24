@@ -4,6 +4,7 @@ import { computeCityAtmosphere } from '../../lib/cityAtmosphere'
 import CityGridFloor from './CityGridFloor'
 import CityDrones from './CityDrones'
 import CityWeather from './CityWeather'
+import CityTower from '../shared/CityTower'
 
 const PROTECTED_THRESHOLD = 60
 const BASE_WIDTH = 520
@@ -436,8 +437,6 @@ function Billboard({ x, y, atmosphere, seed }) {
 
 function DistrictBuilding({ icon, name, to, resilience, locked }) {
   const litFraction = locked ? 0 : resilience / 100
-  const heightPx = 76 + litFraction * 64
-  const litCount = Math.round(WINDOW_COUNT * litFraction)
 
   const body = (
     <div className="flex flex-col items-center gap-1.5">
@@ -445,29 +444,15 @@ function DistrictBuilding({ icon, name, to, resilience, locked }) {
         {locked && <span aria-hidden="true">🔒 </span>}
         <span aria-hidden="true">{icon}</span> {name}
       </p>
-      <div
-        className="rounded-t-lg border-2 grid grid-cols-3 gap-1 p-1.5 transition-[height,box-shadow,filter] duration-500"
-        style={{
-          height: `${heightPx}px`,
-          width: '82px',
-          background: locked ? 'var(--cc-bg-alt)' : `color-mix(in srgb, var(--cc-accent) ${Math.round(litFraction * 35 + 8)}%, #0a0f1e)`,
-          borderColor: locked ? 'var(--cc-panel-border)' : 'var(--cc-accent)',
-          boxShadow: locked ? 'none' : `0 0 ${6 + litFraction * 16}px color-mix(in srgb, var(--cc-accent) 55%, transparent)`,
-          filter: locked ? 'grayscale(1) brightness(0.65)' : 'none',
-        }}
-      >
-        {Array.from({ length: WINDOW_COUNT }).map((_, i) => (
-          <span
-            key={i}
-            className="rounded-[1px]"
-            style={{
-              aspectRatio: '1',
-              background: i < litCount ? 'var(--cc-accent)' : 'rgba(255,255,255,0.08)',
-              boxShadow: i < litCount ? '0 0 4px var(--cc-accent)' : 'none',
-            }}
-          />
-        ))}
-      </div>
+      <CityTower
+        fillFraction={litFraction}
+        color="var(--cc-accent)"
+        width={82}
+        minHeight={76}
+        maxHeight={140}
+        windowCount={WINDOW_COUNT}
+        grayscale={locked}
+      />
       <p className="text-[10px] text-[var(--cc-text-dim)] m-0">{locked ? 'Locked' : `${resilience}%`}</p>
     </div>
   )

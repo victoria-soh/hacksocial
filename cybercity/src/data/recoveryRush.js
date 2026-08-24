@@ -78,6 +78,56 @@ export function getAction(actionId) {
 }
 
 // ---------------------------------------------------------------------------
+// Jargon glossary — powers EventFeed's clickable in-line terms. Matched as
+// plain substrings (longest first, so "forwarding rule" wins over any
+// shorter overlapping term) against whatever text a log/event line actually
+// contains. Teaches vocabulary as it comes up, not as a glossary upfront.
+// ---------------------------------------------------------------------------
+
+export const JARGON_GLOSSARY = [
+  {
+    term: 'forwarding rule',
+    explanation:
+      'A mail rule that silently copies or redirects incoming email elsewhere. Attackers set these up to keep reading your mail even after you change your password.',
+  },
+  {
+    term: 'recovery email',
+    explanation:
+      "The email address used to reset a forgotten password. Whoever controls it can reset anything linked to it — even without knowing your actual password.",
+  },
+  {
+    term: 'reused password',
+    explanation:
+      'The same password used on more than one account. If one site gets breached, attackers try that exact password everywhere else too.',
+  },
+  {
+    term: 'password reset',
+    explanation:
+      'A request to set a new password, usually triggered via a recovery email or phone number — not proof the real account owner is the one doing it.',
+  },
+  {
+    term: 'linked account',
+    explanation:
+      'A "Continue with X" style login, where one account is used to sign into another. Whoever controls the linking account can walk straight into the linked one.',
+  },
+  {
+    term: '2FA',
+    explanation:
+      "Two-factor authentication — a second proof of identity (like a code sent to your phone) beyond just a password, so a stolen password alone isn't enough to log in.",
+  },
+  {
+    term: 'sessions',
+    explanation:
+      "Already-logged-in connections to an account. Changing a password doesn't always end existing sessions — the attacker can stay logged in until sessions are revoked.",
+  },
+  {
+    term: 'new device',
+    explanation:
+      "A login from a device or browser the service hasn't seen before for this account — one of the clearest signs someone other than the owner is accessing it.",
+  },
+]
+
+// ---------------------------------------------------------------------------
 // Levels
 // ---------------------------------------------------------------------------
 
@@ -100,7 +150,7 @@ export const RECOVERY_LEVELS = [
           exposureReason: 'Facebook login uses "Continue with Instagram" — whoever holds Instagram can walk straight into Facebook.',
         },
       ],
-      edges: [{ from: 'instagram', to: 'facebook' }],
+      edges: [{ from: 'instagram', to: 'facebook', label: 'linked account' }],
     },
     // `condition: 'root-not-secured'` events only fire if the root account
     // is still compromised at their trigger time — see applyDueEvents. This
@@ -165,10 +215,10 @@ export const RECOVERY_LEVELS = [
         },
       ],
       edges: [
-        { from: 'gmail', to: 'instagram' },
-        { from: 'gmail', to: 'steam' },
-        { from: 'gmail', to: 'linkedin' },
-        { from: 'instagram', to: 'facebook' },
+        { from: 'gmail', to: 'instagram', label: 'recovery email' },
+        { from: 'gmail', to: 'steam', label: 'recovery email' },
+        { from: 'gmail', to: 'linkedin', label: 'recovery email' },
+        { from: 'instagram', to: 'facebook', label: 'linked account' },
       ],
     },
     fastSecureThresholdSeconds: 90,
@@ -218,7 +268,7 @@ export const RECOVERY_LEVELS = [
             "Jordan reuses the same password everywhere — exactly what your investigation uncovered — so Gmail falling means Instagram falls too.",
         },
       ],
-      edges: [{ from: 'gmail', to: 'instagram' }],
+      edges: [{ from: 'gmail', to: 'instagram', label: 'reused password' }],
     },
     fastSecureThresholdSeconds: 40,
     events: [
@@ -231,9 +281,20 @@ export function getLevel(levelId) {
   return RECOVERY_LEVELS.find((l) => l.id === levelId)
 }
 
+function nodeLabel(level, nodeId) {
+  return level.graph.nodes.find((n) => n.id === nodeId)?.label ?? nodeId
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic incident engine
 // ---------------------------------------------------------------------------
+
+// How long a fix that doesn't address the root cause holds before the
+// attacker (who still controls the root/recovery account) quietly redoes
+// it. This is the deferred-consequence mechanic: the fix visibly "works"
+// for a while so the player isn't just blocked outright — the lesson lands
+// when it's undone with an explanation, not when the button refuses to work.
+export const REVERSION_DELAY_SECONDS = 10
 
 export function createInitialRunState(levelId) {
   const level = getLevel(levelId)
@@ -250,9 +311,22 @@ export function createInitialRunState(levelId) {
     forwardingActive: false,
     hardening: { sessionsRevoked: false, forwardingChecked: false, twoFAEnabled: false },
     elapsedSeconds: 0,
-    log: [], // { actionId, atSeconds, effective, wrongOrder, trap }
+    log: [], // { actionId, atSeconds, effective, wrongOrder, trap, deferredReversion, resultText }
     firedEventIds: [],
-    syntheticEvents: [], // reactive, non-scripted feed entries — e.g. "attacker backed off"
+    // Seeded with the breach itself so the live log never sits on the empty
+    // "monitoring..." placeholder once a scenario is actually running — the
+    // player's root account is already compromised the instant they begin,
+    // and the log should say so immediately rather than waiting for the
+    // first scripted escalation (which can be 30-40+ seconds in).
+    syntheticEvents: [
+      {
+        id: 'initial-breach',
+        atSeconds: 0,
+        text: `${nodeLabel(level, level.rootId)} compromised — unusual login detected`,
+        tone: 'bad',
+      },
+    ],
+    pendingReversions: [], // [{ id, nodeId, dueAtSeconds, causeNodeId }] — see REVERSION_DELAY_SECONDS above
     tipOffPenaltySeconds: 0,
   }
 }
@@ -278,6 +352,31 @@ function cascadeSecure(nodes, level, securedNodeId) {
   }
 }
 
+/** Short, deterministic, template-based description of what an action actually did — no model call, just arithmetic over before/after state. */
+export function describeActionOutcome({ action, level, before, after, effective, wrongOrder, trap, irrelevant, deferredReversion }) {
+  if (trap) return `Time wasted — ${action.trapReason}`
+  if (irrelevant) return 'No effect — that was already handled, or not part of this incident.'
+  if (deferredReversion) {
+    const target = nodeLabel(level, action.targetNodeId)
+    const rootName = nodeLabel(level, level.rootId)
+    return `${target} changed. ${rootName} remains compromised and can still reset it — this won't hold.`
+  }
+  if (wrongOrder) {
+    return `${nodeLabel(level, level.rootId)} needs to be secured first — this had no effect yet.`
+  }
+  if (effective) {
+    const beforeExposed = computeBlastRadius(before)
+    const afterExposed = computeBlastRadius(after)
+    const protectedCount = Math.max(0, beforeExposed - afterExposed)
+    const rootFix = action.targetNodeId === level.rootId && !action.isHardening
+    return `+${protectedCount} account${protectedCount === 1 ? '' : 's'} protected${rootFix ? ', attack path interrupted' : ''}. -${action.timeCost}s`
+  }
+  if (action.isHardening) {
+    return `Hardening applied — reduces what the attacker can still do, even though it doesn't secure a new account. -${action.timeCost}s`
+  }
+  return `No change. -${action.timeCost}s`
+}
+
 /** Mutates a shallow-cloned run state by applying one player action. Returns the new state. */
 export function applyAction(runState, actionId) {
   const level = getLevel(runState.levelId)
@@ -289,6 +388,7 @@ export function applyAction(runState, actionId) {
   let trap = false
   let irrelevant = false
   let rootJustSecured = false
+  let deferredReversion = false
 
   if (action.alwaysTrap) {
     trap = true
@@ -316,7 +416,15 @@ export function applyAction(runState, actionId) {
     const target = nodes[action.targetNodeId]
     const rootExists = Boolean(nodes[level.rootId]) && level.rootId !== action.targetNodeId
     if (rootExists && root.status !== 'secured') {
+      // Deferred consequence, not a silent block: the fix visibly takes —
+      // the node reads as secured right away — but since the root/recovery
+      // account is still compromised, a pending reversion is scheduled
+      // below and the attacker quietly redoes it a little later. No
+      // cascadeSecure here: a fix that's about to be undone shouldn't also
+      // falsely protect anything downstream of it.
       wrongOrder = true
+      deferredReversion = true
+      nodes[action.targetNodeId] = { ...target, status: 'secured' }
     } else if (target.status === 'secured') {
       irrelevant = true
     } else {
@@ -347,16 +455,32 @@ export function applyAction(runState, actionId) {
     })
   }
 
-  return {
+  const pendingReversions = [...runState.pendingReversions]
+  if (deferredReversion) {
+    pendingReversions.push({
+      id: `reversion-${action.targetNodeId}-${newElapsed}`,
+      nodeId: action.targetNodeId,
+      dueAtSeconds: newElapsed + REVERSION_DELAY_SECONDS,
+      causeNodeId: level.rootId,
+    })
+  }
+
+  const after = {
     ...runState,
     nodes,
     hardening,
     elapsedSeconds: newElapsed,
     tipOffPenaltySeconds: tipOff,
     syntheticEvents,
+    pendingReversions,
+  }
+  const resultText = describeActionOutcome({ action, level, before: runState, after, effective, wrongOrder, trap, irrelevant, deferredReversion })
+
+  return {
+    ...after,
     log: [
       ...runState.log,
-      { actionId, atSeconds: newElapsed, effective, wrongOrder, trap, irrelevant },
+      { actionId, atSeconds: newElapsed, effective, wrongOrder, trap, irrelevant, deferredReversion, resultText },
     ],
   }
 }
@@ -389,7 +513,34 @@ export function applyDueEvents(runState, currentElapsedSeconds) {
     }
   }
 
-  return { ...runState, nodes, forwardingActive, firedEventIds }
+  // Deferred consequences: a fix that didn't address the root cause gets
+  // quietly undone once its delay elapses — UNLESS the player secured the
+  // root/recovery account in the meantime, in which case the attacker no
+  // longer has a way to redo it and the pending reversion is simply
+  // dropped (a real win, not an event worth logging).
+  const syntheticEvents = [...runState.syntheticEvents]
+  const stillPending = []
+  for (const rev of runState.pendingReversions) {
+    if (effectiveElapsed < rev.dueAtSeconds) {
+      stillPending.push(rev)
+      continue
+    }
+    const cause = nodes[rev.causeNodeId]
+    if (!cause || cause.status === 'secured') continue // root fixed in time — reversion cancelled
+    const node = nodes[rev.nodeId]
+    if (node && node.status === 'secured') {
+      nodes = { ...nodes, [rev.nodeId]: { ...node, status: 'compromised' } }
+    }
+    syntheticEvents.push({
+      id: rev.id,
+      atSeconds: rev.dueAtSeconds,
+      text: `${nodeLabel(level, rev.nodeId)} password silently reset via ${nodeLabel(level, rev.causeNodeId)} — the change didn't hold because ${nodeLabel(level, rev.causeNodeId)} was still exposed.`,
+      tone: 'bad',
+      reversal: true,
+    })
+  }
+
+  return { ...runState, nodes, forwardingActive, firedEventIds, syntheticEvents, pendingReversions: stillPending }
 }
 
 /** Live blast radius: count of accounts still exposed (not yet secured), for the shrinking counter. */

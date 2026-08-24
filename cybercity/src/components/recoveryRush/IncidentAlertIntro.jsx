@@ -48,6 +48,16 @@ export default function IncidentAlertIntro({ level, onBegin }) {
       </svg>
 
       <div className="relative flex flex-col items-center gap-5 px-4 py-16 sm:py-24 text-center">
+        {/* Same frame/typography as the dashboard's "CYBERCITY PROTECTED" /
+            "CITY UNDER ATTACK" banner (see CityGraphic.jsx) swapped into its
+            alert-mode coloring, so this reads as the same city's status
+            readout escalating, not a separate banner design. */}
+        <div
+          className="cc-alert-entrance px-4 py-2 rounded-lg text-sm sm:text-base font-bold cc-chrome"
+          style={{ background: 'var(--cc-danger)', color: '#050a08', boxShadow: 'var(--cc-glow-danger)' }}
+        >
+          ⚠️ CYBERCITY ALERT: BREACH DETECTED
+        </div>
         <span className="cc-alert-entrance text-6xl sm:text-7xl" aria-hidden="true">
           🚨
         </span>
