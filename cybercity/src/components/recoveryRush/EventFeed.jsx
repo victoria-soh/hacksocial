@@ -81,19 +81,26 @@ export default function EventFeed({ events }) {
     )
   }
   return (
-    <ul className="list-none p-0 m-0 flex flex-col gap-1.5 text-sm cc-chrome" aria-live="polite">
-      {events.map((e) => {
+    <ul className="list-none p-0 m-0 flex flex-col gap-2 text-sm cc-chrome" aria-live="polite">
+      {events.map((e, i) => {
         const tone = eventTone(e)
         const color = TONE_COLOR[tone]
+        const isLatest = i === events.length - 1
         return (
           <li
             key={e.id}
-            className="cc-feed-entry flex items-start gap-2 rounded px-1.5 py-1"
-            style={{ color }}
+            className="cc-feed-entry flex items-start gap-2 rounded px-2 py-1.5"
+            style={{
+              color,
+              borderLeft: `3px solid ${color}`,
+              background: `color-mix(in srgb, ${color} ${isLatest ? 10 : 6}%, transparent)`,
+            }}
           >
-            <span aria-hidden="true">{TONE_ICON[tone]}</span>
+            <span className="text-base" aria-hidden="true">
+              {TONE_ICON[tone]}
+            </span>
             <span className="text-[var(--cc-text-dim)] shrink-0">[{formatTime(e.atSeconds)}]</span>
-            <span>
+            <span className={isLatest ? 'font-bold' : 'font-medium'}>
               <JargonText text={e.text} />
             </span>
           </li>

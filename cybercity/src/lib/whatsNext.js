@@ -14,7 +14,11 @@ export function computeWhatsNext({ state, districts, capstoneUnlocked }) {
   const levelProgress = getLevelProgress(state.xp)
 
   if (capstoneUnlocked && !state.capstone.complete) {
-    return { text: "You've completed every district — the Final Challenge is ready for you.", to: '/final-challenge' }
+    // `milestone: true` is the one case WhatsNextPrompt renders with
+    // elevated styling — every other return below is a routine nudge and
+    // deliberately stays undefined here, since this component is reused
+    // across the whole app and shouldn't visually escalate for those.
+    return { text: "You've completed every district — the Final Challenge is ready for you.", to: '/final-challenge', milestone: true }
   }
 
   if (districts.communityCentre.unlocked) {

@@ -26,11 +26,11 @@ export default function ActionMenu({ onAction, disabled, lastResult }) {
   const lastAction = lastResult ? getAction(lastResult.actionId) : null
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1">
       {lastResult && lastAction && (
         <div
-          className="cc-alert-entrance flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
-          style={{ borderColor: 'var(--cc-panel-border)', background: 'var(--cc-bg-alt)' }}
+          className="cc-alert-entrance flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-xs"
+          style={{ background: 'var(--cc-bg-alt)' }}
         >
           <span aria-hidden="true">{lastAction.icon}</span>
           <span>

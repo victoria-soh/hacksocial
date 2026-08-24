@@ -166,9 +166,27 @@ export const RECOVERY_LEVELS = [
         condition: 'root-not-secured',
       },
       {
+        atSeconds: 65,
+        id: 'ig-bio-change',
+        text: 'Escalation: Instagram bio and profile photo changed',
+        condition: 'root-not-secured',
+      },
+      {
         atSeconds: 90,
         id: 'ig-persistent-escalation',
         text: 'Escalation: attacker is still logged into Instagram from a second new device',
+        condition: 'root-not-secured',
+      },
+      {
+        atSeconds: 120,
+        id: 'fb-dm-spam',
+        text: 'Escalation: Facebook sending spam links to your contacts',
+        condition: 'root-not-secured',
+      },
+      {
+        atSeconds: 150,
+        id: 'ig-recovery-phone',
+        text: "Escalation: Instagram's recovery phone number changed",
         condition: 'root-not-secured',
       },
     ],
@@ -224,7 +242,19 @@ export const RECOVERY_LEVELS = [
     fastSecureThresholdSeconds: 90,
     events: [
       { atSeconds: 40, id: 'ig-reset', text: 'Instagram password reset requested', appliesTo: 'instagram', condition: 'root-not-secured' },
+      {
+        atSeconds: 70,
+        id: 'gmail-contacts-export',
+        text: 'Escalation: attacker exported a copy of your Gmail contacts',
+        condition: 'root-not-secured',
+      },
       { atSeconds: 100, id: 'steam-reset', text: 'Steam password reset requested', appliesTo: 'steam', condition: 'root-not-secured' },
+      {
+        atSeconds: 130,
+        id: 'steam-marketplace-listing',
+        text: 'Escalation: your Steam account listed for sale on a marketplace forum',
+        condition: 'root-not-secured',
+      },
       {
         atSeconds: 160,
         id: 'forwarding-rule',
@@ -233,10 +263,22 @@ export const RECOVERY_LEVELS = [
         condition: 'root-not-secured',
       },
       {
+        atSeconds: 190,
+        id: 'gmail-sent-spam',
+        text: 'Escalation: phishing links sent from your Gmail to your contacts',
+        condition: 'root-not-secured',
+      },
+      {
         atSeconds: 220,
         id: 'linkedin-escalation',
         text: 'Escalation: LinkedIn password reset requested — the attacker is pushing further since Gmail is still open',
         appliesTo: 'linkedin',
+        condition: 'root-not-secured',
+      },
+      {
+        atSeconds: 260,
+        id: 'linkedin-messages',
+        text: 'Escalation: suspicious job-offer messages sent from your LinkedIn',
         condition: 'root-not-secured',
       },
     ],
@@ -273,6 +315,12 @@ export const RECOVERY_LEVELS = [
     fastSecureThresholdSeconds: 40,
     events: [
       { atSeconds: 25, id: 'ig-reset', text: 'Instagram password reset requested', appliesTo: 'instagram', condition: 'root-not-secured' },
+      {
+        atSeconds: 55,
+        id: 'ig-bio-change',
+        text: "Escalation: Jordan's Instagram bio changed",
+        condition: 'root-not-secured',
+      },
     ],
   },
 ]
@@ -543,6 +591,34 @@ export function applyDueEvents(runState, currentElapsedSeconds) {
   return { ...runState, nodes, forwardingActive, firedEventIds, syntheticEvents, pendingReversions: stillPending }
 }
 
+/**
+ * Seconds until the attacker's next move (whichever fires sooner: an
+ * unfired scripted event, or a pending deferred-fix reversion) — null if
+ * nothing is currently scheduled. Mirrors applyDueEvents' own gating
+ * exactly (same tip-off offset, same root-secured cutoff) so the countdown
+ * shown to the player never drifts out of sync with what actually fires.
+ */
+export function getNextAttackerActionSeconds(runState, currentElapsedSeconds) {
+  const level = getLevel(runState.levelId)
+  const effectiveElapsed = currentElapsedSeconds - runState.tipOffPenaltySeconds
+  const rootSecured = runState.nodes[level.rootId]?.status === 'secured'
+
+  const candidates = []
+  for (const evt of level.events) {
+    if (runState.firedEventIds.includes(evt.id)) continue
+    if (evt.condition === 'root-not-secured' && rootSecured) continue
+    candidates.push(evt.atSeconds - effectiveElapsed)
+  }
+  for (const rev of runState.pendingReversions) {
+    const cause = runState.nodes[rev.causeNodeId]
+    if (!cause || cause.status === 'secured') continue
+    candidates.push(rev.dueAtSeconds - effectiveElapsed)
+  }
+
+  const future = candidates.filter((s) => s > 0)
+  return future.length > 0 ? Math.min(...future) : null
+}
+
 /** Live blast radius: count of accounts still exposed (not yet secured), for the shrinking counter. */
 export function computeBlastRadius(runState) {
   const count = Object.values(runState.nodes).filter((n) => n.status !== 'secured').length
@@ -553,24 +629,40 @@ export function isContained(runState) {
   return computeBlastRadius(runState) === 0
 }
 
-export function computeEndSummary(runState) {
+/**
+ * `totalElapsedSeconds` must be the same combined value the running timer
+ * itself uses (elapsedSeconds from action time-costs + realSeconds ticked)
+ * — NOT runState.elapsedSeconds alone. That field only accumulates the
+ * time-cost of actions taken; a player who spent long stretches just
+ * watching the clock tick (no actions) would otherwise get a "Time" value
+ * that could read as low as 0:00 even when the scenario timed out at the
+ * full 5:00, because the passive ticking was never being counted. The
+ * caller (IncidentEngine's endScenario) always has this combined value on
+ * hand at the moment it ends the run, so it's passed in rather than
+ * re-derived here from data this function doesn't have.
+ */
+export function computeEndSummary(runState, totalElapsedSeconds) {
   const nodesList = Object.values(runState.nodes)
   const accountsLost = nodesList.filter((n) => n.status === 'compromised').length
   const accountsExposedAtEnd = nodesList.filter((n) => n.status === 'at-risk').length + (runState.forwardingActive ? 1 : 0)
   const trapActionsTaken = runState.log.filter((l) => l.trap).length
   const wrongOrderPenalties = runState.log.filter((l) => l.wrongOrder).length
-  return { accountsLost, accountsExposedAtEnd, trapActionsTaken, wrongOrderPenalties, secondsUsed: runState.elapsedSeconds }
+  return { accountsLost, accountsExposedAtEnd, trapActionsTaken, wrongOrderPenalties, secondsUsed: totalElapsedSeconds }
 }
 
-/** Builds the ordered-choices + ground-truth-mistakes payload handed to the AI narrator. */
+/** Builds the ordered-choices + ground-truth-mistakes payload handed to the AI narrator (and to EndScreen's per-action callouts — see resultText/deferredReversion/irrelevant below). */
 export function buildMistakeReport(runState) {
   const level = getLevel(runState.levelId)
   const orderedActions = runState.log.map((l) => ({
     action: getAction(l.actionId)?.label,
+    icon: getAction(l.actionId)?.icon,
     atSeconds: l.atSeconds,
     effective: l.effective,
     wrongOrder: l.wrongOrder,
     trap: l.trap,
+    irrelevant: l.irrelevant,
+    deferredReversion: l.deferredReversion,
+    resultText: l.resultText,
   }))
   const detectedMistakes = []
   const wrongOrderEntries = runState.log.filter((l) => l.wrongOrder)

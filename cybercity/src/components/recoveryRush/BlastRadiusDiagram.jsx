@@ -6,14 +6,15 @@ import CityGridFloor from '../dashboard/CityGridFloor'
 // Tiered layout — reuses the same "tier column" idea as Find Alex's case
 // board, driven by each account's own `tier` (already present in
 // data/recoveryRush.js's graph data: 0 = root, 1 = direct dependents, 2 =
-// second-order). Edges get real horizontal room (TIER_X gaps) specifically
-// so their labels — up to ~15 characters — fit inside the line's own span
-// instead of overflowing into neighboring nodes' text.
-const TIER_X = { 0: 20, 1: 260, 2: 500 }
-const COL_W = 140
-const ROW_H = 92
-const TOP_PAD = 16
-const TOWER_ANCHOR_Y = 40 // vertical offset from a node's top to its tower's center, for edge anchors
+// second-order). This is deliberately the single largest, most dominant
+// element on the screen — wide tier gaps so edges are long enough for
+// their tags to sit ON the line without crowding it, and big enough towers
+// that the fill gauge and status color are unmistakable at a glance.
+const TIER_X = { 0: 24, 1: 320, 2: 620 }
+const COL_W = 170
+const ROW_H = 112
+const TOP_PAD = 14
+const TOWER_ANCHOR_Y = 50 // vertical offset from a node's top to its tower's center, for edge anchors
 
 const STATUS_META = {
   compromised: { color: 'var(--cc-danger)', tag: '🔴 COMPROMISED', fill: 0.22 },
@@ -22,10 +23,7 @@ const STATUS_META = {
 }
 
 // A handful of low-opacity building silhouettes so the graph reads as
-// floating above the same skyline shown elsewhere, not empty space. Kept
-// small and local rather than importing CityGraphic's own (module-private)
-// layer arrays, matching how this codebase already treats small ambient
-// decoration recipes as fine to duplicate per call site.
+// floating above the same skyline shown elsewhere, not empty space.
 const SKYLINE_SILHOUETTE = [
   { x: 0, w: 50, h: 90 }, { x: 60, w: 70, h: 140 }, { x: 140, w: 46, h: 75 },
   { x: 195, w: 75, h: 165 }, { x: 280, w: 50, h: 105 }, { x: 340, w: 64, h: 145 },
@@ -55,10 +53,10 @@ function layoutNodes(nodes) {
 }
 
 function anchorRight(pos) {
-  return { x: pos.x + COL_W - 10, y: pos.y + TOWER_ANCHOR_Y }
+  return { x: pos.x + COL_W - 12, y: pos.y + TOWER_ANCHOR_Y }
 }
 function anchorLeft(pos) {
-  return { x: pos.x + 10, y: pos.y + TOWER_ANCHOR_Y }
+  return { x: pos.x + 12, y: pos.y + TOWER_ANCHOR_Y }
 }
 
 export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
@@ -70,19 +68,21 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
     return acc
   }, {})
   const maxRows = Math.max(1, ...Object.values(tierCounts))
-  const svgHeight = TOP_PAD + maxRows * ROW_H + 20
+  const svgHeight = TOP_PAD + maxRows * ROW_H + 12
 
-  // One-shot travel animation: fires whenever a node transitions INTO
-  // 'compromised' (a scripted escalation OR a deferred fix being undone —
-  // both are "a new account becomes threatened"), traced along the graph
-  // edge that actually leads to it. Reuses the exact glowing-point + comet-
-  // tail recipe built for the ambient skyline drones (see CityDrones.jsx),
-  // just animated one-shot along a specific edge instead of looping across
-  // the whole scene — the same "something is moving through the scene"
-  // language, not a new arrow/line-draw effect.
+  // Three distinct per-node flourishes, all keyed off the same before/after
+  // status diff: a shield badge + pop when the PLAYER's action just secured
+  // it (a clear, deliberate "you did that" moment), a shake when it just
+  // became compromised (something bad just happened here, reusing the same
+  // shake already used for wrong-connection feedback elsewhere), and the
+  // one-shot attack-travel spark along the edge that caused it — reusing
+  // the exact glowing-point + comet-tail recipe built for the ambient
+  // skyline drones, just animated one-shot along a specific edge instead of
+  // looping across the whole scene.
   const prevStatusRef = useRef({})
   const [travelingEdges, setTravelingEdges] = useState([]) // [{ key, edge }]
   const [snappingIds, setSnappingIds] = useState(new Set())
+  const [shakingIds, setShakingIds] = useState(new Set())
 
   useEffect(() => {
     const prev = prevStatusRef.current
@@ -116,13 +116,26 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
           newlySecured.forEach((id) => next.delete(id))
           return next
         })
-      }, 450)
+      }, 550)
+    }
+
+    let t3
+    if (newlyCompromised.length > 0) {
+      setShakingIds((s) => new Set([...s, ...newlyCompromised]))
+      t3 = setTimeout(() => {
+        setShakingIds((s) => {
+          const next = new Set(s)
+          newlyCompromised.forEach((id) => next.delete(id))
+          return next
+        })
+      }, 560)
     }
 
     prevStatusRef.current = current
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)
+      clearTimeout(t3)
     }
   }, [nodes, graph, reducedMotion])
 
@@ -156,11 +169,13 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
           </linearGradient>
         </defs>
 
-        {/* Labeled edges — colored by the SOURCE account's status (an edge
-            leaving a compromised account is itself a live attack path,
-            regardless of whether the target has been reached yet), faded
-            once the target is actually secured (that specific path is
-            closed, whatever the source is still doing elsewhere). */}
+        {/* Edges, colored by the SOURCE account's status (an edge leaving a
+            compromised account is itself a live attack path, regardless of
+            whether the target has been reached yet), faded once the target
+            is actually secured. Labels are small tags sitting directly on
+            the line — a tight, borderless backdrop just enough to keep the
+            text legible over the line/background, not a freestanding box
+            competing with the account nodes for attention. */}
         {graph.edges.map((e) => {
           const from = positions[e.from]
           const to = positions[e.to]
@@ -172,7 +187,7 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
           const b = anchorLeft(to)
           const midX = (a.x + b.x) / 2
           const midY = (a.y + b.y) / 2
-          const labelWidth = (e.label?.length ?? 0) * 4.6 + 12
+          const labelWidth = (e.label?.length ?? 0) * 3.6 + 8
 
           return (
             <g key={`${e.from}-${e.to}`}>
@@ -182,14 +197,14 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
                 x2={b.x}
                 y2={b.y}
                 stroke={meta.color}
-                strokeWidth={targetSecured ? 1.25 : 2.25}
+                strokeWidth={targetSecured ? 1.25 : 2.5}
                 opacity={targetSecured ? 0.3 : 0.9}
                 style={{ filter: targetSecured ? undefined : `drop-shadow(0 0 3px ${meta.color})` }}
               />
               {e.label && (
-                <g transform={`translate(${midX - labelWidth / 2}, ${midY - 7})`}>
-                  <rect width={labelWidth} height="14" rx="4" fill="#05070e" stroke={meta.color} strokeWidth="0.75" opacity="0.95" />
-                  <text x={labelWidth / 2} y="10.2" textAnchor="middle" fontSize="7.5" fill={meta.color} className="cc-chrome">
+                <g transform={`translate(${midX - labelWidth / 2}, ${midY - 5.5})`}>
+                  <rect width={labelWidth} height="11" rx="2.5" fill="#05070e" opacity="0.85" />
+                  <text x={labelWidth / 2} y="8.3" textAnchor="middle" fontSize="6.5" fill={meta.color} className="cc-chrome" opacity="0.95">
                     {e.label}
                   </text>
                 </g>
@@ -212,54 +227,66 @@ export default function BlastRadiusDiagram({ graph, nodes, forwardingActive }) {
             <g key={key}>
               <path id={pathId} d={`M ${a.x} ${a.y} L ${b.x} ${b.y}`} fill="none" opacity="0" />
               <g>
-                <animateMotion dur="600ms" repeatCount="1" fill="freeze">
+                <animateMotion dur="650ms" repeatCount="1" fill="freeze">
                   <mpath href={`#${pathId}`} />
                 </animateMotion>
                 <g transform={`rotate(${angle})`}>
-                  <line x1="-14" y1="0" x2="-1.5" y2="0" stroke="url(#cc-attack-tail)" strokeWidth="2.5" strokeLinecap="round" style={{ filter: 'blur(0.3px)' }} />
-                  <ellipse cx="0" cy="0" rx="3" ry="2" fill="var(--cc-danger)" style={{ filter: 'drop-shadow(0 0 5px var(--cc-danger))' }} />
-                  <ellipse cx="0" cy="0" rx="1.3" ry="0.9" fill="#fff6f0" />
+                  <line x1="-18" y1="0" x2="-2" y2="0" stroke="url(#cc-attack-tail)" strokeWidth="3" strokeLinecap="round" style={{ filter: 'blur(0.3px)' }} />
+                  <ellipse cx="0" cy="0" rx="3.6" ry="2.4" fill="var(--cc-danger)" style={{ filter: 'drop-shadow(0 0 6px var(--cc-danger))' }} />
+                  <ellipse cx="0" cy="0" rx="1.6" ry="1.1" fill="#fff6f0" />
                 </g>
               </g>
             </g>
           )
         })}
 
-        {/* Account towers */}
+        {/* Account towers — the dominant element on this screen. */}
         {graph.nodes.map((n) => {
           const pos = positions[n.id]
           const status = nodes[n.id]?.status ?? 'at-risk'
           const meta = STATUS_META[status]
           const isSnapping = snappingIds.has(n.id)
+          const isShaking = shakingIds.has(n.id)
           return (
-            <g
-              key={n.id}
-              transform={`translate(${pos.x}, ${pos.y})`}
-              className={isSnapping && !reducedMotion ? 'cc-pin-pop' : undefined}
-            >
-              <foreignObject x="0" y="0" width={COL_W} height={ROW_H - 8}>
-                <div className="flex flex-col items-center gap-1" style={{ width: `${COL_W}px` }}>
-                  <p
-                    className="text-[11px] font-semibold text-center m-0 leading-tight cc-chrome"
-                    style={{ color: 'var(--cc-text)' }}
-                  >
-                    <span aria-hidden="true">{n.icon}</span> {n.label}
-                  </p>
-                  <CityTower
-                    fillFraction={meta.fill}
-                    color={meta.color}
-                    width={40}
-                    minHeight={32}
-                    maxHeight={52}
-                    windowCount={6}
-                    windowCols={2}
-                    glitch={status === 'compromised' && !reducedMotion}
-                  />
-                  <p className="text-[10px] m-0 cc-chrome font-bold leading-tight whitespace-nowrap" style={{ color: meta.color }}>
-                    {meta.tag}
-                  </p>
-                </div>
-              </foreignObject>
+            <g key={n.id} transform={`translate(${pos.x}, ${pos.y})`}>
+              <g className={[isSnapping && !reducedMotion && 'cc-pin-pop', isShaking && !reducedMotion && 'cc-node-error-shake'].filter(Boolean).join(' ') || undefined}>
+                <foreignObject x="0" y="0" width={COL_W} height={ROW_H - 10}>
+                  {/* content settles at ~95 svg units tall (measured live) — ROW_H-20 leaves >=10 units of clip-safety margin at every ROW_H above */}
+                  <div className="flex flex-col items-center gap-1.5" style={{ width: `${COL_W}px` }}>
+                    <p className="text-[15px] font-semibold text-center m-0 leading-tight cc-chrome" style={{ color: 'var(--cc-text)' }}>
+                      <span aria-hidden="true">{n.icon}</span> {n.label}
+                    </p>
+                    <CityTower
+                      fillFraction={meta.fill}
+                      color={meta.color}
+                      width={56}
+                      minHeight={44}
+                      maxHeight={68}
+                      windowCount={6}
+                      windowCols={2}
+                      glitch={status === 'compromised' && !reducedMotion}
+                    />
+                    <p className="text-[12px] m-0 cc-chrome font-bold leading-tight whitespace-nowrap" style={{ color: meta.color }}>
+                      {meta.tag}
+                    </p>
+                  </div>
+                </foreignObject>
+              </g>
+              {/* A shield badge briefly appears the moment a securing
+                  action lands — a clear, distinct "you did that" payoff,
+                  separate from the node's own settle-into-place pop. */}
+              {isSnapping && !reducedMotion && (
+                <text
+                  className="cc-shield-snap"
+                  x={COL_W / 2}
+                  y="-4"
+                  textAnchor="middle"
+                  fontSize="20"
+                  aria-hidden="true"
+                >
+                  🛡️
+                </text>
+              )}
             </g>
           )
         })}

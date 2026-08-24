@@ -144,6 +144,16 @@ export function scoreDailyChallengeRound(results) {
 // Recovery Rush: incident-response scoring + grading
 // ---------------------------------------------------------------------------
 
+// Shared 0-100 "how good is this" color tier — used anywhere a score gets
+// a visual meter (Recovery Rush's debrief ring/bars, Community Centre's
+// mission-outcome ring) so the same number always reads the same color
+// across the whole app, never redefined per screen.
+export function scoreTierColor(score) {
+  if (score >= 75) return 'var(--cc-good)'
+  if (score >= 50) return 'var(--cc-warn)'
+  return 'var(--cc-danger)'
+}
+
 export function gradeForScore(score) {
   if (score >= 90) return { label: 'Cyber Responder', icon: '🛡️' }
   if (score >= 75) return { label: 'Quick Recoverer', icon: '⚡' }
@@ -174,6 +184,36 @@ export function scoreRecoveryRun({
     score -= Math.ceil((secondsUsed - timeLimitSeconds) / 15) * 5
   }
   return Math.max(0, Math.min(100, Math.round(score)))
+}
+
+/**
+ * A visual breakdown of the same four penalty sources scoreRecoveryRun
+ * already applies to one combined number — decomposed into four
+ * independent 0-100 category readouts for the debrief screen's meters.
+ * Each category uses the exact same per-unit weight as the real score
+ * function (nothing new invented here), it's just presented one dimension
+ * at a time instead of pre-summed. Because each category starts its own
+ * fresh 100 rather than sharing one pool, these four numbers won't average
+ * back to the overall score when a run has penalties in multiple
+ * categories — they're a "here's roughly how each dimension went"
+ * supplement to the real score, not an alternate computation of it.
+ */
+export function computeRecoveryBreakdown({
+  accountsLost,
+  accountsExposedAtEnd,
+  trapActionsTaken,
+  wrongOrderPenalties,
+  secondsUsed,
+  timeLimitSeconds,
+}) {
+  const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)))
+  const overrunPenalty = secondsUsed > timeLimitSeconds ? Math.ceil((secondsUsed - timeLimitSeconds) / 15) * 5 : 0
+  return {
+    priority: clamp(100 - wrongOrderPenalties * 12 - trapActionsTaken * 10),
+    containment: clamp(100 - accountsExposedAtEnd * 8),
+    recovery: clamp(100 - accountsLost * 15),
+    speed: clamp(100 - overrunPenalty),
+  }
 }
 
 export function scoreResidentMission({ correctChoice, clarity }) {

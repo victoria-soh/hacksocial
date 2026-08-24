@@ -76,25 +76,28 @@ function extractJson(text) {
 // ---------------------------------------------------------------------------
 
 const MISTAKE_SYSTEM_PROMPT = `You are a calm, encouraging incident-response coach in a cybersecurity game called CyberCity.
-You will be given: the ordered list of actions a player took (with timestamps), the account dependency graph, and which mistakes our game logic already detected (ground truth — do not contradict it or invent new mistakes).
+You will be given: the ordered list of actions a player took (with timestamps), the account dependency graph, whether the incident actually ended contained or timed out, and which mistakes our game logic already detected (ground truth — do not contradict it or invent new mistakes). A player can end up with zero detected mistakes and STILL not have contained the incident, e.g. by taking too few actions or running out of time passively — never describe a run as successfully contained unless "contained" is true.
 Write a short (3-5 sentence) plain-language explanation of what went well and what went wrong, referencing the SPECIFIC accounts and order involved. No jargon without a one-clause explanation. Do not restate the score. Do not invent facts not present in the input.`
 
-function heuristicExplainMistakes({ detectedMistakes }) {
-  if (detectedMistakes.length === 0) {
+function heuristicExplainMistakes({ detectedMistakes, contained }) {
+  if (detectedMistakes.length === 0 && contained) {
     return "You secured the root account first and worked outward through the dependency graph — that's exactly the right order, because fixing the compromised account first stops the attacker from just re-breaking anything you secure afterward. Nicely contained."
+  }
+  if (detectedMistakes.length === 0) {
+    return "No specific wrong move was flagged, but time ran out before the incident was fully contained — staying passive costs just as much ground as an active mistake does. Next time, secure the root account first, then work outward through the dependency graph before the clock runs out."
   }
   const lines = detectedMistakes.map((m) => m.explanation)
   return `${lines.join(' ')} Next time, work from the root of the compromise outward: secure and lock down the account the attacker actually controls before touching anything downstream.`
 }
 
-export async function explainRecoveryMistakes({ orderedActions, detectedMistakes, graphSummary }) {
+export async function explainRecoveryMistakes({ orderedActions, detectedMistakes, graphSummary, contained }) {
   try {
-    const prompt = JSON.stringify({ orderedActions, detectedMistakes, graphSummary })
+    const prompt = JSON.stringify({ orderedActions, detectedMistakes, graphSummary, contained })
     const text = await callModel({ system: MISTAKE_SYSTEM_PROMPT, prompt, maxTokens: 300 })
     if (text && text.trim().length > 0) return { text: text.trim(), source: 'model' }
     throw new Error('empty-response')
   } catch {
-    return { text: heuristicExplainMistakes({ orderedActions, detectedMistakes }), source: 'heuristic' }
+    return { text: heuristicExplainMistakes({ detectedMistakes, contained }), source: 'heuristic' }
   }
 }
 

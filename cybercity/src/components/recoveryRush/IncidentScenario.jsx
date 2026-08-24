@@ -57,6 +57,7 @@ export default function IncidentScenario() {
         grade={endData.grade}
         contained={endData.contained}
         mistakeReport={endData.mistakeReport}
+        timeLimitSeconds={level.timeLimitSeconds}
         onContinue={() => navigate('/recovery-rush')}
       />
     )

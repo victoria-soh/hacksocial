@@ -33,7 +33,7 @@ export default function CityTower({
 
   return (
     <div
-      className={`grid transition-[height,box-shadow,filter] duration-500 ${glitch ? 'cc-billboard-glitch' : ''}`}
+      className={`grid transition-[height,background,border-color,box-shadow,filter] duration-500 ${glitch ? 'cc-billboard-glitch' : ''}`}
       style={{
         height: `${heightPx}px`,
         width: `${width}px`,
@@ -53,7 +53,7 @@ export default function CityTower({
       {Array.from({ length: windowCount }).map((_, i) => (
         <span
           key={i}
-          className="rounded-[1px]"
+          className="rounded-[1px] transition-[background,box-shadow] duration-500"
           style={{
             aspectRatio: '1',
             background: !grayscale && i < litCount ? color : 'rgba(255,255,255,0.08)',

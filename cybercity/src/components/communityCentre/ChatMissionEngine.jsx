@@ -122,7 +122,7 @@ export default function ChatMissionEngine({ scenario, onComplete }) {
     await playSequence(tileResult.clear ? scenario.replyConsequence.good : scenario.replyConsequence.unclear)
     if (!mountedRef.current || concludedRef.current) return
     concludedRef.current = true
-    onComplete({ correctChoice, tileResult, score })
+    onComplete({ correctChoice, tileResult, score, replyText: assembledText })
   }
 
   return (

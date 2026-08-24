@@ -5,6 +5,7 @@ import {
   applyAction,
   applyDueEvents,
   computeBlastRadius,
+  getNextAttackerActionSeconds,
   isContained,
   computeEndSummary,
   buildMistakeReport,
@@ -69,9 +70,9 @@ export default function IncidentEngine({ levelId, onComplete }) {
     setRunState(updated)
     recordBlast(updated)
     if (isContained(updated)) {
-      endScenario(updated, true)
+      endScenario(updated, true, combined)
     } else if (combined >= level.timeLimitSeconds) {
-      endScenario(updated, false)
+      endScenario(updated, false, combined)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realSeconds, phase])
@@ -106,16 +107,21 @@ export default function IncidentEngine({ levelId, onComplete }) {
     const justLogged = updated.log[updated.log.length - 1]
     setLastResult({ actionId, resultText: justLogged.resultText })
     if (isContained(updated)) {
-      endScenario(updated, true)
+      endScenario(updated, true, combined)
     } else if (combined >= level.timeLimitSeconds) {
-      endScenario(updated, false)
+      endScenario(updated, false, combined)
     }
   }
 
-  function endScenario(finalState, contained) {
+  // `totalElapsedSeconds` is the SAME combined value (action time-costs +
+  // real seconds ticked) the on-screen timer uses to compute `remaining` —
+  // never runState.elapsedSeconds alone, which only tracks action costs and
+  // silently ignores any time spent just watching the clock. Passing it
+  // through explicitly is what keeps the debrief's "Time" value honest.
+  function endScenario(finalState, contained, totalElapsedSeconds) {
     if (concludedRef.current) return // isContained + the time-limit check can both fire off the same update; only report once
     concludedRef.current = true
-    const summary = computeEndSummary(finalState)
+    const summary = computeEndSummary(finalState, totalElapsedSeconds)
     const score = scoreRecoveryRun({ ...summary, timeLimitSeconds: level.timeLimitSeconds })
     const grade = gradeForScore(score)
     onComplete({ summary, score, grade, contained, mistakeReport: buildMistakeReport(finalState) })
@@ -138,45 +144,52 @@ export default function IncidentEngine({ levelId, onComplete }) {
   const exposureRatio = Math.max(0, Math.min(1, blastRadius / initialExposure))
   const gaugeColor = `color-mix(in srgb, var(--cc-danger) ${Math.round(exposureRatio * 100)}%, var(--cc-good))`
   const timerDanger = remaining <= 30
+  const nextAttackSeconds = getNextAttackerActionSeconds(runState, combinedElapsed)
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <AmbientTension />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg sm:text-xl font-bold m-0">{level.name}</h1>
-        <div
-          className="cc-lcd"
-          role="timer"
-          aria-label={`Time remaining: ${formatTime(remaining)}`}
-          style={{ color: timerDanger ? 'var(--cc-danger)' : 'var(--cc-accent)' }}
-        >
-          <span className="text-xl font-bold" style={{ textShadow: timerDanger ? 'var(--cc-glow-danger)' : 'var(--cc-glow-cyan)' }}>
-            ⏱️ {formatTime(remaining)}
-          </span>
+      {/* Header: the timer is the single most urgent readout on screen, the
+          next-attack countdown sits right beside it as a distinct warning,
+          and blast radius folds in as a compact inline readout rather than
+          its own full-width bar — no duplicated number, no bordered strip
+          for a single value. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <h1 className="text-base sm:text-lg font-bold m-0 text-[var(--cc-text-dim)]">{level.name}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className="cc-lcd"
+            role="timer"
+            aria-label={`Time remaining: ${formatTime(remaining)}`}
+            style={{ color: timerDanger ? 'var(--cc-danger)' : 'var(--cc-accent)' }}
+          >
+            <span
+              className={`text-3xl sm:text-4xl font-bold ${timerDanger ? 'cc-pulse' : ''}`}
+              style={{ textShadow: timerDanger ? 'var(--cc-glow-danger)' : 'var(--cc-glow-cyan)' }}
+            >
+              ⏱️ {formatTime(remaining)}
+            </span>
+          </div>
+          {nextAttackSeconds != null && (
+            <div className="cc-lcd" style={{ color: 'var(--cc-warn)' }} aria-live="off">
+              <span className="text-sm font-bold" style={{ textShadow: 'var(--cc-glow-warn)' }}>
+                ⚔️ NEXT ATTACK {formatTime(nextAttackSeconds)}
+              </span>
+            </div>
+          )}
+          <div
+            className={`cc-lcd ${blastCue === 'grow' ? 'cc-node-error-shake' : ''} ${blastCue === 'shrink' ? 'cc-blast-shrink' : ''}`}
+            style={{ color: gaugeColor }}
+          >
+            <span className="text-sm font-bold" style={{ textShadow: `0 0 8px ${gaugeColor}` }}>
+              💥 BLAST RADIUS {blastRadius === 0 ? 'CONTAINED' : blastRadius}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div
-        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
-        style={{ borderColor: 'var(--cc-panel-border)', background: 'var(--cc-bg-alt)' }}
-      >
-        <span className="text-[11px] text-[var(--cc-text-dim)] cc-chrome font-bold tracking-wide">ACCOUNTS EXPOSED</span>
-        <span
-          className={`cc-lcd ${blastCue === 'grow' ? 'cc-node-error-shake' : ''} ${blastCue === 'shrink' ? 'cc-blast-shrink' : ''}`}
-          style={{ color: gaugeColor }}
-        >
-          <span className="text-base font-bold" style={{ textShadow: `0 0 8px ${gaugeColor}` }}>
-            {blastRadius === 0 ? 'CONTAINED' : blastRadius}
-          </span>
-        </span>
-        <span className="text-[10px] text-[var(--cc-text-dim)] cc-chrome hidden md:inline">
-          {blastHistory.join(' → ')}
-          {blastRadius === 0 && ' → CONTAINED'}
-        </span>
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-[1.5fr_1fr] min-h-0">
+      <div className="grid gap-2 lg:grid-cols-[2fr_1fr] min-h-0">
         <Panel className="!p-2.5">
           <h2 className="text-sm font-semibold mt-0 mb-2 cc-chrome">Account map</h2>
           <BlastRadiusDiagram graph={level.graph} rootId={level.rootId} nodes={runState.nodes} forwardingActive={runState.forwardingActive} />
@@ -199,18 +212,18 @@ export default function IncidentEngine({ levelId, onComplete }) {
           </details>
         </Panel>
 
-        <Panel className="!p-2.5 flex flex-col min-h-0">
+        <Panel className="!p-2.5 flex flex-col min-h-0" brackets={false}>
           <div className="flex items-center justify-between mb-2 shrink-0">
             <h2 className="text-sm font-semibold m-0 cc-chrome">Live incident log</h2>
             <LiveIndicator />
           </div>
-          <div className="overflow-y-auto min-h-0 pr-1" style={{ maxHeight: '280px' }}>
+          <div className="overflow-y-auto min-h-0 pr-1" style={{ maxHeight: '340px' }}>
             <EventFeed events={firedEvents} />
           </div>
         </Panel>
       </div>
 
-      <Panel className="!p-2.5">
+      <Panel className="!p-2.5" brackets={false}>
         <h2 className="text-sm font-semibold mt-0 mb-2 cc-chrome">What do you do?</h2>
         <ActionMenu onAction={handleAction} disabled={phase !== 'running'} lastResult={lastResult} />
       </Panel>
