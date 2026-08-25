@@ -154,7 +154,6 @@ export default function PrivacyMirror() {
           explanationsLoading={explanationsLoading}
           committedScores={committedScores}
           chains={chains}
-          aiAvailable={aiAvailable}
           onContinue={switchSides}
         />
       )}
@@ -233,7 +232,7 @@ function ScreenSelect({ selectedIds, toggleCategory, liveScores, onReveal }) {
   )
 }
 
-function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanationsLoading, committedScores, chains, aiAvailable, onContinue }) {
+function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanationsLoading, committedScores, chains, onContinue }) {
   const directCategories = SHARING_CATEGORIES.filter((c) => committedIds.includes(c.id))
 
   return (
@@ -268,14 +267,19 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
                   <p className="text-xs text-[var(--cc-text-dim)] m-0 mt-0.5">
                     {explanationsLoading ? 'Generating explanation…' : riskExplanations[r.id]?.text}
                   </p>
+                  {!explanationsLoading && (
+                    <AiFallbackNotice
+                      show={riskExplanations[r.id]?.source === 'heuristic'}
+                      message={AI_FALLBACK_MESSAGE}
+                      className="mt-1"
+                    />
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </div>
       </div>
-
-      <AiFallbackNotice show={!aiAvailable} message={AI_FALLBACK_MESSAGE} />
 
       <div>
         <h3 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--cc-accent-2)' }}>

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGame } from '../../state/GameContext'
+import { unlockedLandmarkIds } from '../../data/levels'
 import Panel from '../shared/Panel'
+import CityGraphic from './CityGraphic'
 
 const MISSIONS = [
   { id: 'investigator', icon: '🔎', title: 'Investigator', description: 'Discover what digital breadcrumbs reveal.' },
@@ -11,7 +13,7 @@ const MISSIONS = [
 
 export default function OnboardingFlow() {
   const [step, setStep] = useState('welcome')
-  const { completeOnboarding } = useGame()
+  const { completeOnboarding, districts, overallResilience, xp } = useGame()
   const navigate = useNavigate()
 
   function choose(id) {
@@ -27,6 +29,20 @@ export default function OnboardingFlow() {
           <p className="text-[var(--cc-text-dim)] m-0">
             Cyber threats don't only attack computers. They exploit the choices people make online.
           </p>
+
+          <div className="w-full max-w-sm mx-auto">
+            <CityGraphic
+              overallResilience={overallResilience}
+              districts={districts}
+              unlockedLandmarkIds={unlockedLandmarkIds(xp)}
+              interactive={false}
+            />
+          </div>
+          <p className="text-sm text-[var(--cc-text-dim)] m-0">
+            This is your city — it represents your accounts. Districts are account clusters, and each resilience
+            tower shows how protected that district is. Complete missions to strengthen your city.
+          </p>
+
           <button
             onClick={() => setStep('choose')}
             className="self-center mt-2 px-5 py-2.5 rounded-lg bg-[var(--cc-accent)] text-[#06111c] font-semibold min-h-11"
@@ -39,6 +55,9 @@ export default function OnboardingFlow() {
       {step === 'choose' && (
         <Panel className="flex flex-col gap-4">
           <h2 className="text-xl font-bold m-0 text-center">Choose your mission</h2>
+          <p className="text-sm text-[var(--cc-text-dim)] m-0 border-l-2 pl-3" style={{ borderColor: 'var(--cc-accent-2)' }}>
+            Whichever you pick, you'll start at Digital Breadcrumbs first — it's where the story begins.
+          </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {MISSIONS.map((m) => (
               <button
@@ -54,9 +73,6 @@ export default function OnboardingFlow() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-[var(--cc-text-dim)] text-center m-0">
-            New to CyberCity? We'll start everyone at Digital Breadcrumbs first — it's where the story begins.
-          </p>
         </Panel>
       )}
     </div>

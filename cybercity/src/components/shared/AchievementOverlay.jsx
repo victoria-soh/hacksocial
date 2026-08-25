@@ -75,7 +75,7 @@ export default function AchievementOverlay() {
   if (!current) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 pointer-events-none">
+    <div className="fixed top-4 inset-x-4 sm:inset-x-auto sm:right-4 z-50 flex justify-center sm:justify-end pointer-events-none">
       <div
         role="status"
         aria-live="polite"

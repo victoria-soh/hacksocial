@@ -138,8 +138,17 @@ function useParallax(containerRef) {
   }, [containerRef])
 }
 
-/** Decorative-only; per-district resilience is also exposed via each district building's aria-label below. */
-export default function CityGraphic({ overallResilience, districts, unlockedLandmarkIds = [] }) {
+/**
+ * Decorative-only; per-district resilience is also exposed via each
+ * district building's aria-label below.
+ *
+ * `interactive` (default true): set false to render the district buildings
+ * as static, non-focusable previews instead of links — for contexts like
+ * the onboarding welcome screen, where the districts aren't navigable yet
+ * (the player isn't `onboarded` until they pick a mission, so a real click
+ * here would just bounce them straight back via ProtectedLayout's guard).
+ */
+export default function CityGraphic({ overallResilience, districts, unlockedLandmarkIds = [], interactive = true }) {
   const containerRef = useRef(null)
   useParallax(containerRef)
 
@@ -371,6 +380,7 @@ export default function CityGraphic({ overallResilience, districts, unlockedLand
             resilience={districts[d.key].resilience}
             missionsLeft={missionsRemaining(d.key, districts[d.key])}
             locked={d.key === 'communityCentre' ? !districts.communityCentre.unlocked : false}
+            interactive={interactive}
           />
         ))}
       </div>
@@ -483,7 +493,7 @@ function BuildingTooltip({ name, resilience, missionsLeft, locked }) {
   )
 }
 
-function DistrictBuilding({ icon, name, to, resilience, missionsLeft, locked }) {
+function DistrictBuilding({ icon, name, to, resilience, missionsLeft, locked, interactive = true }) {
   const litFraction = locked ? 0 : resilience / 100
 
   const body = (
@@ -512,6 +522,10 @@ function DistrictBuilding({ icon, name, to, resilience, missionsLeft, locked }) 
         {body}
       </div>
     )
+  }
+
+  if (!interactive) {
+    return <div className="relative">{body}</div>
   }
 
   return (
