@@ -138,7 +138,7 @@ function useParallax(containerRef) {
   }, [containerRef])
 }
 
-/** Decorative-only. The plain-text resilience list is the real source of the same information — see DistrictCard/CityDashboard. */
+/** Decorative-only; per-district resilience is also exposed via each district building's aria-label below. */
 export default function CityGraphic({ overallResilience, districts, unlockedLandmarkIds = [] }) {
   const containerRef = useRef(null)
   useParallax(containerRef)
@@ -458,9 +458,9 @@ function Billboard({ x, y, atmosphere, seed }) {
 }
 
 // A small hover/focus tooltip — the same name/resilience/missions-remaining
-// facts already available elsewhere on the page (the aria-label, the text
-// toggle), surfaced right at the point of interaction instead of requiring
-// a click to find out what a building represents.
+// facts already available via this building's own aria-label, surfaced
+// right at the point of interaction instead of requiring a click to find
+// out what a building represents.
 function BuildingTooltip({ name, resilience, missionsLeft, locked }) {
   return (
     <div

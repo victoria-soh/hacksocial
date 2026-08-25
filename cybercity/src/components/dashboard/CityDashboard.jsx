@@ -64,48 +64,10 @@ function MoreOptions({ children }) {
   )
 }
 
-// Collapsed by default — the city graphic above is the one primary,
-// always-visible representation of resilience; this is the same numbers
-// as plain text, for anyone who wants that instead of/alongside the
-// illustration (screen readers, low vision, or just a preference for text).
-function ResilienceTextView({ overallResilience, rows }) {
-  return (
-    <Disclosure label="Show resilience as text (accessibility view)">
-      <Panel as="section" aria-labelledby="resilience-table-heading">
-        <h2 id="resilience-table-heading" className="text-base font-semibold mt-0 mb-3">
-          District resilience (plain-text view)
-        </h2>
-        <ul className="list-none p-0 m-0 flex flex-col gap-2">
-          <li className="flex justify-between border-b border-[var(--cc-panel-border)] pb-2">
-            <span>Overall city resilience</span>
-            <strong>{overallResilience}%</strong>
-          </li>
-          {rows.map((r) => (
-            <li key={r.name} className="flex justify-between items-center">
-              <span className="flex items-center gap-2">
-                <span aria-hidden="true">{r.icon}</span>
-                {r.name}
-                {r.locked && <span className="text-xs text-[var(--cc-text-dim)]">(locked)</span>}
-              </span>
-              <strong>{r.locked ? '—' : `${r.resilience}%`}</strong>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </Disclosure>
-  )
-}
-
 export default function CityDashboard() {
   const { districts, overallResilience, xp, state, capstoneUnlocked, capstone } = useGame()
   const planUnlocked = isDefencePlanUnlocked(state)
   const nextMission = computeNextMission(districts)
-
-  const rows = [
-    { icon: '🔎', name: 'Digital Breadcrumbs', resilience: districts.breadcrumbs.resilience, locked: false },
-    { icon: '🚨', name: 'Recovery Rush', resilience: districts.recoveryRush.resilience, locked: false },
-    { icon: '🛡️', name: 'Community Centre', resilience: districts.communityCentre.resilience, locked: !districts.communityCentre.unlocked },
-  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -185,8 +147,6 @@ export default function CityDashboard() {
       )}
 
       <CityGraphic overallResilience={overallResilience} districts={districts} unlockedLandmarkIds={unlockedLandmarkIds(xp)} />
-
-      <ResilienceTextView overallResilience={overallResilience} rows={rows} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <DistrictCard

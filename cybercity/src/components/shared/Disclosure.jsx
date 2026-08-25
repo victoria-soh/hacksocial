@@ -4,7 +4,7 @@ import Panel from './Panel'
 /**
  * Shared collapsed/expanded disclosure trigger for secondary/optional
  * content that shouldn't carry the same visual weight as the panels around
- * it (the dashboard's "More Options" and its plain-text resilience view).
+ * it (e.g. the dashboard's "More Options").
  * The trigger itself IS a compact Panel — the same HUD border/glow/corner-
  * bracket treatment as every other panel on the page — with a chevron that
  * rotates open, instead of a bare underlined link sitting on its own.
