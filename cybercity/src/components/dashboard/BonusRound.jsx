@@ -97,7 +97,9 @@ export default function BonusRound() {
         <div className="flex flex-col gap-3">
           <div>
             <p className="text-xs text-[var(--cc-text-dim)] m-0 mb-1">Message from: {example.message.sender}</p>
-            <p className="bg-[var(--cc-bg-alt)] rounded-lg p-3 m-0 text-sm">{example.message.text}</p>
+            <Panel as="p" brackets={false} className="!p-3 text-sm whitespace-pre-line" style={{ fontFamily: 'var(--font-chrome)' }}>
+              {example.message.text}
+            </Panel>
             <AiFallbackNotice
               show={example.source === 'heuristic'}
               message="AI service unavailable — this example is from the built-in pool."

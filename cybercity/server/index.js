@@ -137,7 +137,9 @@ app.post('/api/ai/complete', async (req, res) => {
       return res.status(502).json({ error: `Anthropic API call failed (${anthropicRes.status})` })
     }
     const data = await anthropicRes.json()
-    const text = data?.content?.[0]?.text ?? ''
+    // Not always content[0]: extended-thinking responses put a `thinking`
+    // block first, with the actual answer in the next `text` block.
+    const text = data?.content?.find((block) => block?.type === 'text')?.text ?? ''
     res.json({ text })
   } catch (err) {
     console.error('Anthropic API call threw', err)

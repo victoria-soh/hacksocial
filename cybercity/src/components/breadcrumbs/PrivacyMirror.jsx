@@ -237,7 +237,7 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <Panel brackets={false} className="grid gap-4 sm:grid-cols-2">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--cc-accent)' }}>
             Directly visible
@@ -279,17 +279,17 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
             </ul>
           )}
         </div>
-      </div>
+      </Panel>
 
-      <div>
-        <h3 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--cc-accent-2)' }}>
+      <Panel brackets={false} style={{ borderColor: 'var(--cc-danger)', boxShadow: 'var(--cc-glow-danger)' }}>
+        <h3 className="text-sm font-bold uppercase tracking-wide mb-3 mt-0" style={{ color: 'var(--cc-accent-2)' }}>
           How these connect
         </h3>
         <ExposureChainDiagram chains={chains} />
-      </div>
+      </Panel>
 
-      <div>
-        <h3 className="text-base font-bold mb-2">Your Sharing Style</h3>
+      <Panel brackets={false}>
+        <h3 className="text-base font-bold mb-2 mt-0">Your Sharing Style</h3>
         <div className="grid gap-2 sm:grid-cols-2">
           {RISK_TYPES.map((r) => (
             <ProgressBar
@@ -298,13 +298,14 @@ function ScreenReveal({ committedIds, inferableRisks, riskExplanations, explanat
               value={committedScores[r.id]}
               max={MAX_POSSIBLE_SCORES[r.id]}
               color={LEVEL_COLOR_VAR[riskLevel(committedScores[r.id], r.id)]}
+              glow={riskLevel(committedScores[r.id], r.id) === 'High'}
             />
           ))}
         </div>
         <p className="text-sm text-[var(--cc-text-dim)] mt-3 mb-0">
           Multiple independent clues can reveal patterns that no individual post reveals by itself.
         </p>
-      </div>
+      </Panel>
 
       <EngineInspector selectedIds={committedIds} />
 
