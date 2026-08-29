@@ -11,7 +11,7 @@ The problem it's built for: security education is usually a wall of warnings nob
 
 ```bash
 git clone https://github.com/victoria-soh/hacksocial.git
-cd cybercity
+cd hacksocial/cybercity
 npm install
 npm run dev
 ```
@@ -23,8 +23,8 @@ Open **http://localhost:5173**. The whole game is playable right now — every m
 Without a backend, the three AI-backed features (below) silently serve deterministic local fallback content, marked with a small **ⓘ** you have to tap to notice. If you just run the frontend alone, you will not see the AI working — you'll see the fallback and might reasonably conclude there's no real model integration. There is; it just needs a key:
 
 ```bash
-# in a second terminal
-cd server
+# in a second terminal, from wherever you cloned
+cd hacksocial/cybercity/server
 cp .env.example .env
 # open .env and set ANTHROPIC_API_KEY=sk-ant-... (https://console.anthropic.com/)
 npm install
