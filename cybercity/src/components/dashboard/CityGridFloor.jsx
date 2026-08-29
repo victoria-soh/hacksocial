@@ -20,10 +20,16 @@ export default function CityGridFloor() {
           transformOrigin: 'top',
         }}
       />
-      {/* Horizon glow line where the grid "starts" */}
+      {/* Depth fade: the grid pattern above is uniformly bright at every
+          depth on its own (the 3D perspective transform only handles
+          spacing/converging, not brightness), which flattens it. This
+          overlay mutes the pattern increasingly toward the top of the box
+          (the far/horizon end) while staying fully transparent at the
+          bottom (the near/viewer end), so the same grid reads as brighter
+          and more saturated close up, fading out toward the horizon. */}
       <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{ background: 'var(--cc-accent-2)', boxShadow: '0 0 8px 1px var(--cc-accent-2)', opacity: 0.7 }}
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, transparent 0%, rgba(13, 18, 38, 0.88) 100%)' }}
       />
     </div>
   )

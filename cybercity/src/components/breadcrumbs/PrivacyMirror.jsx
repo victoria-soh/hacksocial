@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { PRIVACY_MIRROR_INTRO, SHARING_CATEGORIES, RISK_TYPES } from '../../data/privacyMirror'
 import {
   computeRiskScores,
@@ -13,7 +13,7 @@ import {
   NOT_ENOUGH_EVIDENCE,
   MAX_POSSIBLE_SCORES,
 } from '../../lib/privacyMirrorEngine'
-import { checkAiAvailable, explainPrivacyMirrorRisk, generatePrivacyMirrorPersona } from '../../lib/ai'
+import { explainPrivacyMirrorRisk, generatePrivacyMirrorPersona } from '../../lib/ai'
 import { calculatePrivacyDefenceScore } from '../../lib/scoring'
 import { useGame } from '../../state/GameContext'
 import Panel from '../shared/Panel'
@@ -52,21 +52,10 @@ export default function PrivacyMirror() {
   const [step, setStep] = useState('select') // select -> reveal -> persona
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [committedIds, setCommittedIds] = useState([])
-  const [aiAvailable, setAiAvailable] = useState(true) // optimistic default, matches the rest of the app
   const [transitionDone, setTransitionDone] = useState(false)
 
   const [riskExplanations, setRiskExplanations] = useState({}) // riskId -> { text, source }
   const [explanationsLoading, setExplanationsLoading] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    checkAiAvailable().then((available) => {
-      if (!cancelled) setAiAvailable(available)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   function toggleCategory(id) {
     setSelectedIds((prev) => {
@@ -167,7 +156,6 @@ export default function PrivacyMirror() {
           groundTruths={groundTruths}
           riskExplanations={riskExplanations}
           allChains={allChains}
-          aiAvailable={aiAvailable}
         />
       )}
     </Panel>
@@ -572,8 +560,8 @@ function Debrief({ persona, committedIds, directPicks, groundTruths, results, al
         🔑 {keyLesson}
       </p>
 
-      <div>
-        <h4 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--cc-accent-2)' }}>
+      <Panel brackets={false} style={{ borderColor: 'var(--cc-danger)', boxShadow: 'var(--cc-glow-danger)' }}>
+        <h4 className="text-sm font-bold uppercase tracking-wide mb-3 mt-0" style={{ color: 'var(--cc-accent-2)' }}>
           Reveal the trail
         </h4>
         {revealChains.length > 0 ? (
@@ -584,12 +572,12 @@ function Debrief({ persona, committedIds, directPicks, groundTruths, results, al
             inferable pattern.
           </p>
         )}
-      </div>
+      </Panel>
     </div>
   )
 }
 
-function ScreenInvestigate({ persona, committedIds, groundTruths, riskExplanations, allChains, aiAvailable }) {
+function ScreenInvestigate({ persona, committedIds, groundTruths, riskExplanations, allChains }) {
   const [phase, setPhase] = useState('direct') // direct -> inference -> debrief
   const [directPicks, setDirectPicks] = useState(null)
   const [activeRiskId, setActiveRiskId] = useState(null)
@@ -617,8 +605,6 @@ function ScreenInvestigate({ persona, committedIds, groundTruths, riskExplanatio
           generated using your sharing habits — not your personal information.
         </p>
       </div>
-
-      <AiFallbackNotice show={!aiAvailable} message={AI_FALLBACK_MESSAGE} />
 
       <div className="cc-role-reversal-line bg-[var(--cc-bg-alt)] rounded-lg p-4">
         <p className="font-bold m-0 mb-2">{persona.name}</p>

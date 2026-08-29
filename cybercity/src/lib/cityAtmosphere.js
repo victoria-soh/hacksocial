@@ -15,9 +15,20 @@ export function computeCityAtmosphere(resilience) {
   return {
     clarity,
 
-    // Tier 1: fog/haze + neon intensity + flicker + billboards
-    fogOpacity: 0.6 * (1 - clarity),
-    skylineBlur: 1.6 * (1 - clarity), // px
+    // Tier 1: fog/haze + neon intensity + flicker + billboards. Low
+    // resilience should read as "night, few lights on, muted palette" —
+    // dim and cold, but crisp — not "viewed through fog": contrast comes
+    // from neonSaturation/neonBrightness (color) rather than from blurring
+    // or fogging the scene into indistinctness. skylineBlur is gone
+    // entirely (was up to 1.6px) — a fixed CSS px blur doesn't scale down
+    // with the component, so it hit the small onboarding-preview rendering
+    // far harder than the full-size dashboard one, on top of already being
+    // the wrong tool for "dim" (blur reads as out-of-focus, not as dark).
+    // fogOpacity's ceiling is cut from 0.6 to 0.18 for the same reason: a
+    // translucent haze is fine as a light tint, not as the primary way the
+    // low-resilience mood reads.
+    fogOpacity: 0.18 * (1 - clarity),
+    skylineBlur: 0,
     neonSaturation: 0.15 + clarity * 1.15,
     neonBrightness: 0.55 + clarity * 0.55,
     glowStrength: 1 + clarity * 7, // px

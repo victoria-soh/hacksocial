@@ -50,6 +50,39 @@ export async function checkAiAvailable({ force = false } = {}) {
 }
 
 /**
+ * Safety net for the "no markdown" instruction every system prompt below
+ * now carries — the prompt asks nicely, this makes sure a generation that
+ * ignores it still never reaches a player as raw `**`/`_`/`` ` ``. Only
+ * unwraps PAIRED emphasis markers (removes the markers, keeps the text
+ * between them) rather than deleting every asterisk/underscore outright —
+ * a generated phishing message can legitimately contain a lone one (e.g.
+ * "50% off*" or a code-like domain), and mangling that content would be
+ * worse than the formatting bug. Underscore pairs specifically skip
+ * intraword matches (CommonMark's own rule for `_..._`) so real
+ * identifiers/usernames/domains like "get_user_data" or "alex_t" survive
+ * untouched — only markdown-style emphasis at a word boundary is unwrapped.
+ * Also unwraps [label](url) link syntax down to just the label — caught
+ * live in a Training Simulation sender field despite the prompt asking for
+ * plain prose, so it's the one pattern here not in the original spec.
+ * Applied here, at the one choke point every AI-backed feature already
+ * routes through, so this covers all of them without each caller needing
+ * its own copy. Output stays plain text — never rendered as HTML — so this
+ * can't become a markdown-to-HTML injection path.
+ */
+function sanitizeModelText(text) {
+  let out = text
+  out = out.replace(/\[([^\]\n]+?)\]\([^)\n]+?\)/g, '$1') // [label](url) link syntax — keep the label, drop the URL
+  out = out.replace(/\*\*([^*\n]+?)\*\*/g, '$1') // **bold**
+  out = out.replace(/(?<!\w)__([^_\n]+?)__(?!\w)/g, '$1') // __bold__ (not intraword)
+  out = out.replace(/\*([^*\n]+?)\*/g, '$1') // *italic*
+  out = out.replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, '$1') // _italic_ (not intraword)
+  out = out.replace(/`([^`\n]+?)`/g, '$1') // `code`
+  out = out.replace(/^#{1,6}\s+/gm, '') // leading "# " heading markers
+  out = out.replace(/^(\s*)[-*]\s+/gm, '$1') // leading "- " / "* " list markers
+  return out
+}
+
+/**
  * Low-level provider call — routed through our own backend's
  * POST /api/ai/complete (server/index.js), which holds the actual Anthropic
  * API key. The key never reaches the browser. If the backend has no key
@@ -61,7 +94,7 @@ async function callModel({ system, prompt, maxTokens = 600 }) {
   if (typeof text !== 'string') {
     throw new Error('malformed-response')
   }
-  return text
+  return sanitizeModelText(text)
 }
 
 function extractJson(text) {
@@ -77,7 +110,8 @@ function extractJson(text) {
 
 const MISTAKE_SYSTEM_PROMPT = `You are a calm, encouraging incident-response coach in a cybersecurity game called CyberCity.
 You will be given: the ordered list of actions a player took (with timestamps), the account dependency graph, whether the incident actually ended contained or timed out, and which mistakes our game logic already detected (ground truth — do not contradict it or invent new mistakes). A player can end up with zero detected mistakes and STILL not have contained the incident, e.g. by taking too few actions or running out of time passively — never describe a run as successfully contained unless "contained" is true.
-Write a short (3-5 sentence) plain-language explanation of what went well and what went wrong, referencing the SPECIFIC accounts and order involved. No jargon without a one-clause explanation. Do not restate the score. Do not invent facts not present in the input.`
+Write a short (3-5 sentence) plain-language explanation of what went well and what went wrong, referencing the SPECIFIC accounts and order involved. No jargon without a one-clause explanation. Do not restate the score. Do not invent facts not present in the input.
+Output plain prose only — no markdown formatting: no asterisks, underscores, backticks, headers, bullet syntax, or [link](url) syntax.`
 
 function heuristicExplainMistakes({ detectedMistakes, contained }) {
   if (detectedMistakes.length === 0 && contained) {
@@ -115,7 +149,8 @@ const SCAM_EXAMPLE_SYSTEM_PROMPT = `You write short, realistic example scam/phis
 - "advanced": highly plausible, correct branding/tone, no grammar errors, only a subtle red flag (e.g. a slightly-wrong domain).
 Respond with ONLY a JSON object of this exact shape:
 {"sender": string, "text": string, "redFlags": string[], "plausibleButSafe": string[]}
-"redFlags" are the genuine tells you deliberately embedded (2-3 short phrases quoting or describing the specific detail). "plausibleButSafe" are 1-2 details in the message that might LOOK suspicious to a nervous reader but are actually normal/not indicators of a scam. Never include any commentary outside the JSON. This is for a fictional practice exercise — do not reference any real company's actual current security incidents.`
+"redFlags" are the genuine tells you deliberately embedded (2-3 short phrases quoting or describing the specific detail). "plausibleButSafe" are 1-2 details in the message that might LOOK suspicious to a nervous reader but are actually normal/not indicators of a scam. Never include any commentary outside the JSON. This is for a fictional practice exercise — do not reference any real company's actual current security incidents.
+Every string value (sender, text, and each list entry) must be plain prose with no markdown formatting: no asterisks, underscores, backticks, headers, bullet syntax, or [link](url) syntax.`
 
 function normalizeScamExample(raw, difficulty, source) {
   const redFlags = raw.redFlags.map((text, i) => ({ id: `flag-${i}`, text }))
@@ -184,7 +219,8 @@ function hashSelection(selectedIds) {
 
 const RISK_EXPLANATION_SYSTEM_PROMPT = `You are a calm privacy-education narrator inside a game called CyberCity.
 You will be given a risk type and the SPECIFIC reasoning chain (or specific categories) our own scoring engine already determined caused it to be inferable — this is ground truth, not your judgment.
-Write ONE short sentence (max ~25 words) explaining, in plain language, why this is inferable — referencing the actual chain/categories given. Do not invent new categories or reasons. Do not mention scores, numbers, or percentages. Respond with only the sentence, no quotes.`
+Write ONE short sentence (max ~25 words) explaining, in plain language, why this is inferable — referencing the actual chain/categories given. Do not invent new categories or reasons. Do not mention scores, numbers, or percentages. Respond with only the sentence, no quotes.
+Plain prose only — no markdown formatting: no asterisks, underscores, backticks, headers, bullet syntax, or [link](url) syntax.`
 
 function heuristicExplainRisk({ riskLabel, chain, categoryLabels }) {
   if (chain) {

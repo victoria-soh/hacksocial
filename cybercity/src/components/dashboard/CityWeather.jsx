@@ -5,32 +5,23 @@ function stableRandom(seed) {
 }
 
 /**
- * Rain + a smeared neon reflection strip, both driven by
- * atmosphere.rainIntensity (heavier at low resilience, clearing up as it
- * improves) — the same continuous parameter as everything else, so a
- * clearing sky and a settling city read as the same underlying story.
- * Plain HTML/CSS (not SVG), since rain needs to cover the whole scene
- * uniformly rather than live in the skyline's own coordinate space.
+ * Falling rain, driven by atmosphere.rainIntensity (heavier at low
+ * resilience, clearing up as it improves) — the same continuous parameter
+ * as everything else, so a clearing sky and a settling city read as the
+ * same underlying story. Plain HTML/CSS (not SVG), since rain needs to
+ * cover the whole scene uniformly rather than live in the skyline's own
+ * coordinate space.
+ *
+ * (This used to also render a full-width "wet-ground reflection" smear
+ * right at the building/grid-floor boundary — removed because it read as a
+ * continuous band/seam there, worst exactly at low resilience since it's
+ * rainIntensity-driven and rain is heaviest when resilience is lowest.)
  */
 export default function CityWeather({ atmosphere }) {
   const rainCount = Math.round(atmosphere.rainIntensity * RAIN_COUNT_MAX)
 
   return (
     <>
-      {/* Wet-ground reflection: a soft blurred smear of neon color sitting
-          right where the buildings meet the grid floor. */}
-      <div
-        className="absolute left-0 right-0 pointer-events-none"
-        style={{
-          bottom: '22%',
-          height: '7%',
-          opacity: atmosphere.rainIntensity * 0.75,
-          filter: 'blur(5px)',
-          background: 'linear-gradient(90deg, rgba(34,230,255,0.4), rgba(255,47,214,0.35), rgba(34,230,255,0.35))',
-          transition: 'opacity 700ms ease',
-        }}
-      />
-
       {rainCount > 0 && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {Array.from({ length: rainCount }).map((_, i) => {
